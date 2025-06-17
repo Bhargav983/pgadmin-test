@@ -125,10 +125,12 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {availableRooms.map((room) => (
-                        <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
-                          {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
-                        </SelectItem>
+                      {availableRooms
+                        .filter(room => room.id && room.id.trim() !== "") // Ensure room.id is not empty or just whitespace
+                        .map((room) => (
+                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
+                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
+                          </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
