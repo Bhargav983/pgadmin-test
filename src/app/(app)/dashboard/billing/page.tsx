@@ -10,10 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
-import { PDFDownloadLink, Document, Page, Text } from '@react-pdf/renderer'; 
-import OverduePaymentsDocument from '@/components/pdf-documents/OverduePaymentsDocument';
-import type { OverdueResidentForPdf } from '@/components/pdf-documents/OverduePaymentsDocument';
-
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -49,15 +45,6 @@ interface ReportSummaries {
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// Minimal document for PDFDownloadLink's loading state
-const LoadingPdfDocument = (
-  <Document>
-    <Page size="A4">
-      <Text>Preparing PDF...</Text>
-    </Page>
-  </Document>
-);
-
 export default function BillingPage() {
   const [reportSummaries, setReportSummaries] = useState<ReportSummaries>({
     upcomingPaymentsAmount: 0,
@@ -77,11 +64,6 @@ export default function BillingPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
-  const [isClient, setIsClient] = useState(false); 
-
-  useEffect(() => {
-    setIsClient(true); 
-  }, []);
 
 
   const calculateReportSummaries = useCallback(() => {
@@ -244,27 +226,6 @@ export default function BillingPage() {
   }, [calculateReportSummaries]);
 
 
-  const preparedOverdueDataForPdf: OverdueResidentForPdf[] = useMemo(() => {
-    return reportSummaries.overdueResidents.map(res => ({
-        id: res.id,
-        name: res.name,
-        roomNumber: res.roomDetails?.roomNumber || 'N/A',
-        overdueAmount: res.overdueAmount,
-        lastPaymentMonth: res.lastPaymentMonth || 'N/A'
-    }));
-  }, [reportSummaries.overdueResidents]);
-
-  const actualPdfDocumentInstance = useMemo(() => {
-    return (
-        <OverduePaymentsDocument
-            data={preparedOverdueDataForPdf}
-            totalOverdueAmount={reportSummaries.overduePaymentsAmount}
-            reportDate={`As of ${format(currentDisplayDate, 'PPP')}`}
-        />
-    );
-  }, [preparedOverdueDataForPdf, reportSummaries.overduePaymentsAmount, currentDisplayDate]);
-
-
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -414,28 +375,6 @@ export default function BillingPage() {
                     <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
                     <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
                 </div>
-                {isClient && preparedOverdueDataForPdf.length > 0 && (
-                    <PDFDownloadLink
-                    document={actualPdfDocumentInstance} 
-                    fileName={`Overdue_Payments_Report_${format(currentDisplayDate, 'yyyy-MM-dd')}.pdf`}
-                    >
-                    {({ blob, url, loading, error }) =>
-                        loading ? (
-                        <Button variant="outline" size="sm" disabled>
-                            <FileDown className="mr-2 h-4 w-4 animate-pulse" /> Generating PDF...
-                        </Button>
-                        ) : error ? (
-                        <Button variant="outline" size="sm" disabled className="text-destructive border-destructive">
-                            <AlertTriangle className="mr-2 h-4 w-4" /> Error Generating PDF
-                        </Button>
-                        ) : (
-                        <Button variant="outline" size="sm">
-                            <FileDown className="mr-2 h-4 w-4" /> Download PDF
-                        </Button>
-                        )
-                    }
-                    </PDFDownloadLink>
-                )}
             </CardHeader>
             <CardContent>
               {reportSummaries.overdueResidents.length > 0 ? (
@@ -472,8 +411,7 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent>
             <p className="text-muted-foreground">
-                Currently, PDF export is available for the "Overdue Residents" report.
-                Direct export to Excel or PDF for other sections is a complex feature typically requiring server-side processing or larger client-side libraries.
+                Direct export to Excel or PDF for reports is a complex feature typically requiring server-side processing or larger client-side libraries.
                 For now, you can use your browser's print functionality (Ctrl/Cmd + P) for individual pages or tables, or copy-paste data from tables into a spreadsheet program.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
@@ -483,5 +421,4 @@ export default function BillingPage() {
       </Card>
     </div>
   );
-
-    
+}
