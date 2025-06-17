@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
-import { PDFDownloadLink, Document, Page, Text } from '@react-pdf/renderer'; // Added Document, Page, Text for placeholder
+import { PDFDownloadLink, Document, Page, Text } from '@react-pdf/renderer'; 
 import OverduePaymentsDocument from '@/components/pdf-documents/OverduePaymentsDocument';
 import type { OverdueResidentForPdf } from '@/components/pdf-documents/OverduePaymentsDocument';
 
@@ -416,7 +416,7 @@ export default function BillingPage() {
                 </div>
                 {isClient && preparedOverdueDataForPdf.length > 0 && (
                     <PDFDownloadLink
-                    document={actualPdfDocumentInstance} // Use the fully prepared instance here
+                    document={actualPdfDocumentInstance} 
                     fileName={`Overdue_Payments_Report_${format(currentDisplayDate, 'yyyy-MM-dd')}.pdf`}
                     >
                     {({ blob, url, loading, error }) =>
@@ -426,7 +426,7 @@ export default function BillingPage() {
                         </Button>
                         ) : error ? (
                         <Button variant="outline" size="sm" disabled className="text-destructive border-destructive">
-                            <AlertTriangle className="mr-2 h-4 w-4" /> Error
+                            <AlertTriangle className="mr-2 h-4 w-4" /> Error Generating PDF
                         </Button>
                         ) : (
                         <Button variant="outline" size="sm">
@@ -483,8 +483,5 @@ export default function BillingPage() {
       </Card>
     </div>
   );
-}
-
-    
 
     
