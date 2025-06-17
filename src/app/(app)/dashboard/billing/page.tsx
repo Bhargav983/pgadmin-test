@@ -4,13 +4,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown, IndianRupee } from "lucide-react";
+import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown, IndianRupee, CalendarIcon } from "lucide-react";
 import type { Resident, Room, Payment, AttendanceRecord } from "@/lib/types"; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { format, startOfDay } from 'date-fns';
+import { format, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, subWeeks, subYears, startOfYear, endOfYear, eachDayOfInterval, isValid } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -31,11 +36,12 @@ interface ReportSummaries {
   recentPayments: (Payment & { residentName: string; roomNumber: string })[];
   overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[]; 
   // Attendance related
-  presentToday: number;
-  lateToday: number;
-  absentToday: number;
-  onLeaveToday: number;
-  pendingToday: number;
+  attendancePresent: number;
+  attendanceLate: number;
+  attendanceAbsent: number;
+  attendanceOnLeave: number;
+  attendancePending: number;
+  attendanceRangeLabel: string;
   // Occupancy related
   totalActiveResidents: number;
   totalCapacity: number;
@@ -46,6 +52,17 @@ interface ReportSummaries {
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+const predefinedDateRanges = [
+  { label: "Today", value: "today" },
+  { label: "This Week", value: "this_week" },
+  { label: "This Month", value: "this_month" },
+  { label: "Last Week", value: "last_week" },
+  { label: "Last Month", value: "last_month" },
+  { label: "Last 3 Months", value: "last_3_months" },
+  { label: "This Year", value: "this_year" },
+  { label: "Custom Range", value: "custom" },
+];
+
 export default function ReportsOverviewPage() {
   const [reportSummaries, setReportSummaries] = useState<ReportSummaries>({
     upcomingPaymentsAmount: 0,
@@ -53,19 +70,83 @@ export default function ReportsOverviewPage() {
     collectedThisMonthAmount: 0,
     recentPayments: [],
     overdueResidents: [],
-    presentToday: 0,
-    lateToday: 0,
-    absentToday: 0,
-    onLeaveToday: 0,
-    pendingToday: 0,
+    attendancePresent: 0,
+    attendanceLate: 0,
+    attendanceAbsent: 0,
+    attendanceOnLeave: 0,
+    attendancePending: 0,
+    attendanceRangeLabel: "Today",
     totalActiveResidents: 0,
     totalCapacity: 0,
     occupiedBeds: 0,
     vacantBeds: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
+  const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate); // For "As of"
   const [isClient, setIsClient] = useState(false);
+
+  const [selectedRangeType, setSelectedRangeType] = useState<string>("today");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(startOfDay(new Date()));
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(startOfDay(new Date()));
+
+
+  const getDateRangeDetails = useCallback((): { start: Date; end: Date; label: string } => {
+    const now = new Date();
+    let start: Date, end: Date, label: string;
+
+    switch (selectedRangeType) {
+      case "today":
+        start = startOfDay(now);
+        end = startOfDay(now);
+        label = `Today (${format(now, "dd MMM")})`;
+        break;
+      case "this_week":
+        start = startOfWeek(now, { weekStartsOn: 1 });
+        end = endOfWeek(now, { weekStartsOn: 1 });
+        label = `This Week (${format(start, "dd MMM")} - ${format(end, "dd MMM")})`;
+        break;
+      case "this_month":
+        start = startOfMonth(now);
+        end = endOfMonth(now);
+        label = `This Month (${format(now, "MMMM yyyy")})`;
+        break;
+      case "last_week":
+        const lastWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+        start = lastWeekStart;
+        end = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
+        label = `Last Week (${format(start, "dd MMM")} - ${format(end, "dd MMM")})`;
+        break;
+      case "last_month":
+        const prevMonth = subMonths(now, 1);
+        start = startOfMonth(prevMonth);
+        end = endOfMonth(prevMonth);
+        label = `Last Month (${format(prevMonth, "MMMM yyyy")})`;
+        break;
+      case "last_3_months":
+        start = startOfMonth(subMonths(now, 2)); 
+        end = endOfMonth(now); 
+        label = `Last 3 Months (${format(start, "MMM yyyy")} - ${format(end, "MMM yyyy")})`;
+        break;
+      case "this_year":
+        start = startOfYear(now);
+        end = endOfYear(now);
+        label = `This Year (${format(now, "yyyy")})`;
+        break;
+      case "custom":
+        let sDate = customStartDate ? startOfDay(customStartDate) : startOfDay(now);
+        let eDate = customEndDate ? startOfDay(customEndDate) : startOfDay(now);
+        if (sDate > eDate) [sDate, eDate] = [eDate, sDate]; // Swap if start is after end
+        start = sDate;
+        end = eDate;
+        label = `Custom (${format(start, "dd MMM yyyy")} - ${format(end, "dd MMM yyyy")})`;
+        break;
+      default:
+        start = startOfDay(now);
+        end = startOfDay(now);
+        label = `Today (${format(now, "dd MMM")})`;
+    }
+    return { start, end, label };
+  }, [selectedRangeType, customStartDate, customEndDate]);
 
 
   const calculateReportSummaries = useCallback(() => {
@@ -73,16 +154,16 @@ export default function ReportsOverviewPage() {
     const activeResidents = getStoredData<Resident>('pgResidents')
       .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
       .filter(r => r.status === 'active');
-    const rooms = getStoredData<Room>('pgRooms');
+    const roomsData = getStoredData<Room>('pgRooms');
     const allAttendanceRecords = getStoredData<AttendanceRecord>('pgAttendanceRecords');
 
-    const currentDate = new Date();
-    setCurrentDisplayDate(currentDate);
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentYear = currentDate.getFullYear();
-    const todayFormatted = format(startOfDay(currentDate), 'yyyy-MM-dd');
+    const currentDateForHeader = new Date();
+    setCurrentDisplayDate(currentDateForHeader);
 
-    // --- Payment Calculations ---
+    // --- Financial Calculations (based on current month relative to page load) ---
+    const currentMonth = currentDateForHeader.getMonth() + 1;
+    const currentYear = currentDateForHeader.getFullYear();
+    
     let upcomingTotal = 0;
     let overdueTotal = 0;
     let collectedThisMonthTotal = 0;
@@ -90,7 +171,7 @@ export default function ReportsOverviewPage() {
     const overdueResidentsList: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[] = [];
 
     activeResidents.forEach(resident => {
-      const room = rooms.find(r => r.id === resident.roomId);
+      const room = roomsData.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return; 
 
       resident.payments.forEach(p => {
@@ -148,10 +229,10 @@ export default function ReportsOverviewPage() {
       }
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
-        const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth -1;
+        const monthStartInner = (y === firstCheckYear) ? firstCheckMonth : 1;
+        const monthEndInner = (y < currentYear) ? 12 : currentMonth -1;
 
-        for (let m = monthStart; m <= monthEnd; m++) {
+        for (let m = monthStartInner; m <= monthEndInner; m++) {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) {
              continue;
            }
@@ -164,7 +245,6 @@ export default function ReportsOverviewPage() {
            }
         }
       }
-
       if (totalDueFromResident > 0) {
         overdueTotal += totalDueFromResident;
         overdueResidentsList.push({
@@ -177,29 +257,41 @@ export default function ReportsOverviewPage() {
     });
     allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // --- Attendance Calculations ---
-    let presentToday = 0, lateToday = 0, absentToday = 0, onLeaveToday = 0, pendingToday = 0;
-    const attendanceForToday = allAttendanceRecords.filter(ar => ar.date === todayFormatted);
-    const activeResidentIds = new Set(activeResidents.map(res => res.id));
+    // --- Attendance Calculations for Selected Range ---
+    const { start: attendanceStartDate, end: attendanceEndDate, label: attendanceRangeLabel } = getDateRangeDetails();
+    let presentInRange = 0, lateInRange = 0, absentInRange = 0, onLeaveInRange = 0, pendingInRange = 0;
+    
+    if (isValid(attendanceStartDate) && isValid(attendanceEndDate)) {
+        const daysInSelectedRange = eachDayOfInterval({ start: attendanceStartDate, end: attendanceEndDate });
+        const activeResidentIds = new Set(activeResidents.map(res => res.id));
 
-    attendanceForToday.forEach(ar => {
-      if (!activeResidentIds.has(ar.residentId)) return; 
-      switch(ar.status) {
-        case 'Present': presentToday++; break;
-        case 'Late': lateToday++; break;
-        case 'Absent': absentToday++; break;
-        case 'On Leave': onLeaveToday++; break;
-        // 'Pending' status is counted below for those with no record
-      }
-    });
-    // Add residents who have no attendance record for today to 'Pending'
-    pendingToday = activeResidents.filter(res => !attendanceForToday.find(ar => ar.residentId === res.id)).length;
+        daysInSelectedRange.forEach(day => {
+            const dayFormatted = format(day, 'yyyy-MM-dd');
+            activeResidents.forEach(resident => {
+                const recordForDay = allAttendanceRecords.find(
+                    ar => ar.residentId === resident.id && ar.date === dayFormatted
+                );
+
+                if (recordForDay) {
+                    switch(recordForDay.status) {
+                        case 'Present': presentInRange++; break;
+                        case 'Late': lateInRange++; break;
+                        case 'Absent': absentInRange++; break;
+                        case 'On Leave': onLeaveInRange++; break;
+                        case 'Pending': pendingInRange++; break; 
+                    }
+                } else {
+                    pendingInRange++; 
+                }
+            });
+        });
+    }
 
 
-    // --- Occupancy Calculations ---
-    const totalCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
-    const totalActiveResidents = activeResidents.length; 
-    const vacantBeds = totalCapacity - totalActiveResidents;
+    // --- Occupancy Calculations (current snapshot) ---
+    const totalCapacity = roomsData.reduce((sum, room) => sum + room.capacity, 0);
+    const totalActiveResidentsCount = activeResidents.length; 
+    const vacantBeds = totalCapacity - totalActiveResidentsCount;
 
     setReportSummaries({
       upcomingPaymentsAmount: upcomingTotal,
@@ -207,18 +299,19 @@ export default function ReportsOverviewPage() {
       collectedThisMonthAmount: collectedThisMonthTotal,
       recentPayments: allPayments.slice(0, 5),
       overdueResidents: overdueResidentsList.sort((a,b) => b.overdueAmount - a.overdueAmount),
-      presentToday,
-      lateToday,
-      absentToday,
-      onLeaveToday,
-      pendingToday,
-      totalActiveResidents,
+      attendancePresent: presentInRange,
+      attendanceLate: lateInRange,
+      attendanceAbsent: absentInRange,
+      attendanceOnLeave: onLeaveInRange,
+      attendancePending: pendingInRange,
+      attendanceRangeLabel: attendanceRangeLabel,
+      totalActiveResidents: totalActiveResidentsCount,
       totalCapacity,
-      occupiedBeds: totalActiveResidents,
+      occupiedBeds: totalActiveResidentsCount,
       vacantBeds: vacantBeds < 0 ? 0 : vacantBeds, 
     });
     setIsLoading(false);
-  }, []);
+  }, [getDateRangeDetails]);
 
   useEffect(() => {
     setIsClient(true); 
@@ -231,9 +324,7 @@ export default function ReportsOverviewPage() {
       }
     };
     
-    const handleStorageChange = () => { 
-        calculateReportSummaries();
-    }
+    const handleStorageChange = () => calculateReportSummaries();
 
     window.addEventListener('dataChanged', handleDataChanged);
     window.addEventListener('storage', handleStorageChange);
@@ -245,7 +336,7 @@ export default function ReportsOverviewPage() {
   }, [calculateReportSummaries]);
 
 
-  if (isLoading && !isClient) { // Show loader only on initial server render or if client is still loading
+  if (isLoading && !isClient) { 
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -399,33 +490,97 @@ export default function ReportsOverviewPage() {
 
         <TabsContent value="attendance" className="mt-6">
           <section className="space-y-6">
-            <h2 className="text-2xl font-headline font-semibold text-primary">Attendance Overview</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h2 className="text-2xl font-headline font-semibold text-primary">Attendance Overview</h2>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                    <Select value={selectedRangeType} onValueChange={setSelectedRangeType}>
+                        <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectValue placeholder="Select Range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {predefinedDateRanges.map(range => (
+                                <SelectItem key={range.value} value={range.value}>{range.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {selectedRangeType === 'custom' && (
+                        <>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-full sm:w-[240px] justify-start text-left font-normal",
+                                    !customStartDate && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {customStartDate ? format(customStartDate, "PPP") : <span>Start Date</span>}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={customStartDate}
+                                    onSelect={setCustomStartDate}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-full sm:w-[240px] justify-start text-left font-normal",
+                                    !customEndDate && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {customEndDate ? format(customEndDate, "PPP") : <span>End Date</span>}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={customEndDate}
+                                    onSelect={setCustomEndDate}
+                                    disabled={(date) => customStartDate && date < customStartDate}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                        </>
+                    )}
+                </div>
+            </div>
+            
             <Link href="/dashboard/attendance" className="block hover:shadow-lg transition-shadow rounded-lg">
                 <Card className="shadow-md h-full cursor-pointer">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Today's Attendance ({format(currentDisplayDate, 'dd MMM')})</CardTitle>
+                    <CardTitle className="text-sm font-medium">Attendance for: {reportSummaries.attendanceRangeLabel}</CardTitle>
                     <ClipboardCheck className="h-4 w-4 text-accent" />
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 text-sm">
                     <div className="p-3 rounded-md bg-secondary">
                         <p className="text-muted-foreground">Present</p>
-                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.presentToday}</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.attendancePresent}</p>
                     </div>
                     <div className="p-3 rounded-md bg-secondary">
                         <p className="text-muted-foreground">Late</p>
-                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.lateToday}</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.attendanceLate}</p>
                     </div>
                     <div className="p-3 rounded-md bg-secondary">
                         <p className="text-muted-foreground">Absent</p>
-                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.absentToday}</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.attendanceAbsent}</p>
                     </div>
                     <div className="p-3 rounded-md bg-secondary">
                         <p className="text-muted-foreground">On Leave</p>
-                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.onLeaveToday}</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.attendanceOnLeave}</p>
                     </div>
                     <div className="p-3 rounded-md bg-muted">
-                        <p className="text-muted-foreground">Pending</p>
-                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.pendingToday}</p>
+                        <p className="text-muted-foreground">No Record</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.attendancePending}</p>
                     </div>
                 </CardContent>
                  <CardContent className="pt-2">
@@ -433,6 +588,9 @@ export default function ReportsOverviewPage() {
                  </CardContent>
                 </Card>
             </Link>
+             {isLoading && isClient && (selectedRangeType === 'custom' && (!customStartDate || !customEndDate)) && (
+                <p className="text-sm text-center text-muted-foreground">Please select both start and end dates for custom range.</p>
+             )}
              {isLoading && isClient && (
                 <div className="flex justify-center items-center h-32">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-solid border-primary border-t-transparent"></div>
