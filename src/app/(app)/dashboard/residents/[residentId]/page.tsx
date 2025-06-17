@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Resident, Room, Payment, ActivityLogEntry } from '@/lib/types';
 import { format } from 'date-fns';
-import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud, IndianRupee, DollarSign } from 'lucide-react';
+import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud, IndianRupee, DollarSign, Mail } from 'lucide-react';
 import NextImage from 'next/image';
 
 
@@ -144,6 +144,7 @@ export default function ResidentDetailPage() {
         </div>
       </div>
 
+      {/* Row 1: Basic Info & Photo */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-lg">
@@ -151,6 +152,7 @@ export default function ResidentDetailPage() {
                 <CardTitle className="font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent" />Basic Information</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                    <div><Mail className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Email:</strong> {resident.email}</div>
                     <div><Phone className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Contact:</strong> {resident.contact}</div>
                     <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Enquiry Date:</strong> {resident.enquiryDate ? format(new Date(resident.enquiryDate), 'dd MMM, yyyy') : 'N/A'}</div>
                     <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Joining Date:</strong> {resident.joiningDate ? format(new Date(resident.joiningDate), 'dd MMM, yyyy') : 'N/A'}</div>
@@ -180,14 +182,14 @@ export default function ResidentDetailPage() {
                 </Card>
             )}
         </div>
-        <div className="space-y-6">
+        <div className="lg:col-span-1">
             <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="font-headline flex items-center"><ImageIcon className="mr-2 h-5 w-5 text-accent"/>Photo</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {resident.photoUrl ? (
-                        <NextImage src={resident.photoUrl} alt={`${resident.name}'s photo`} width={200} height={200} className="rounded-md border object-cover mx-auto" data-ai-hint="person portrait" />
+                        <NextImage src={resident.photoUrl} alt={`${resident.name}'s photo`} width={200} height={200} className="rounded-md border object-cover mx-auto" data-ai-hint="person portrait"/>
                     ): (
                         <div className="w-full aspect-square max-w-[200px] mx-auto bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
                             <UploadCloud className="h-10 w-10" />
@@ -196,25 +198,27 @@ export default function ResidentDetailPage() {
                     )}
                 </CardContent>
             </Card>
-             <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-accent"/>ID Proof</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {resident.idProofUrl ? (
-                        <NextImage src={resident.idProofUrl} alt={`${resident.name}'s ID proof`} width={300} height={200} className="rounded-md border object-contain mx-auto" data-ai-hint="document id" />
-                    ): (
-                         <div className="w-full aspect-[3/2] max-w-[300px] mx-auto bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
-                            <UploadCloud className="h-10 w-10" />
-                             <span className="mt-1 text-xs">No ID proof uploaded</span>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
         </div>
       </div>
 
-
+      {/* Row 2: ID Proof */}
+      <Card className="shadow-lg">
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-accent"/>ID Proof</CardTitle>
+        </CardHeader>
+        <CardContent>
+            {resident.idProofUrl ? (
+                <NextImage src={resident.idProofUrl} alt={`${resident.name}'s ID proof`} width={300} height={200} className="rounded-md border object-contain mx-auto" data-ai-hint="document id"/>
+            ): (
+                  <div className="w-full aspect-[3/2] max-w-[300px] mx-auto bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
+                    <UploadCloud className="h-10 w-10" />
+                      <span className="mt-1 text-xs">No ID proof uploaded</span>
+                </div>
+            )}
+        </CardContent>
+      </Card>
+      
+      {/* Payment History */}
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline flex items-center"><Wallet className="mr-2 h-5 w-5 text-primary" />Payment History</CardTitle>
@@ -254,6 +258,7 @@ export default function ResidentDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Activity Log */}
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline flex items-center"><History className="mr-2 h-5 w-5 text-accent" />Activity Log</CardTitle>
@@ -298,3 +303,4 @@ export default function ResidentDetailPage() {
     </div>
   );
 }
+
