@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ResidentForm } from "../resident-form";
+import { ResidentForm } from "@/app/(app)/dashboard/residents/resident-form";
 import type { Resident, ResidentFormValues, Room, ResidentStatus, ActivityType } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
