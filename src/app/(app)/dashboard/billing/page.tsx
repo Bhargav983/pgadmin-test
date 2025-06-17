@@ -4,11 +4,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck } from "lucide-react";
+import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown } from "lucide-react";
 import type { Resident, Room, Payment, AttendanceRecord, AttendanceStatus } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import OverduePaymentsDocument from '@/components/pdf-documents/OverduePaymentsDocument';
+
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -63,6 +67,11 @@ export default function BillingPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
+  const [isClient, setIsClient] = useState(false); // For conditional rendering of PDFLink
+
+  useEffect(() => {
+    setIsClient(true); // Ensure PDFDownloadLink only renders on client
+  }, []);
 
 
   const calculateReportSummaries = useCallback(() => {
@@ -371,9 +380,35 @@ export default function BillingPage() {
           </Card>
 
           <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
-              <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
+            <CardHeader className="flex justify-between items-center">
+                <div>
+                    <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
+                    <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
+                </div>
+                {isClient && reportSummaries.overdueResidents.length > 0 && (
+                    <PDFDownloadLink
+                    document={
+                        <OverduePaymentsDocument 
+                            data={reportSummaries.overdueResidents} 
+                            totalOverdueAmount={reportSummaries.overduePaymentsAmount} 
+                            reportDate={`As of ${format(currentDisplayDate, 'PPP')}`}
+                        />
+                    }
+                    fileName={`Overdue_Payments_Report_${format(currentDisplayDate, 'yyyy-MM-dd')}.pdf`}
+                    >
+                    {({ blob, url, loading, error }) =>
+                        loading ? (
+                        <Button variant="outline" size="sm" disabled>
+                            <FileDown className="mr-2 h-4 w-4 animate-pulse" /> Generating PDF...
+                        </Button>
+                        ) : (
+                        <Button variant="outline" size="sm">
+                            <FileDown className="mr-2 h-4 w-4" /> Download PDF
+                        </Button>
+                        )
+                    }
+                    </PDFDownloadLink>
+                )}
             </CardHeader>
             <CardContent>
               {reportSummaries.overdueResidents.length > 0 ? (
@@ -410,7 +445,8 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent>
             <p className="text-muted-foreground">
-                Direct export to Excel or PDF is a complex feature typically requiring server-side processing or larger client-side libraries.
+                Currently, PDF export is available for the "Overdue Residents" report.
+                Direct export to Excel or PDF for other sections is a complex feature typically requiring server-side processing or larger client-side libraries.
                 For now, you can use your browser's print functionality (Ctrl/Cmd + P) for individual pages or tables, or copy-paste data from tables into a spreadsheet program.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
