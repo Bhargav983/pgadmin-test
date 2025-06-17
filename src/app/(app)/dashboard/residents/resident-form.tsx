@@ -4,7 +4,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -46,6 +45,7 @@ interface ResidentFormProps {
 const residentStatuses: { value: ResidentStatus; label: string }[] = [
   { value: "upcoming", label: "Upcoming" },
   { value: "active", label: "Active" },
+  { value: "former", label: "Former" }, 
 ];
 
 export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditing, availableRooms }: ResidentFormProps) {
@@ -70,7 +70,7 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
           roomId: defaultValues.roomId || null,
           status: defaultValues.status || (isEditing ? "active" : "upcoming"),
         });
-      } else {
+      } else { // For adding new resident
         form.reset({ name: "", contact: "", personalInfo: "", roomId: null, status: "upcoming" });
       }
     }
@@ -124,7 +124,11 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assign Room</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined} >
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || undefined} 
+                    disabled={form.getValues("status") === 'former'} // Disable room if former
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a room (optional for upcoming)" />
@@ -151,7 +155,14 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      if (value === 'former') { // If status changed to former, unassign room
+                        form.setValue('roomId', null);
+                      }
+                    }} 
+                    value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select status" />
@@ -159,7 +170,8 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                     </FormControl>
                     <SelectContent>
                       {residentStatuses.map((status) => (
-                        <SelectItem key={status.value} value={status.value}>
+                        <SelectItem key={status.value} value={status.value} disabled={isEditing && defaultValues?.status === 'former' && status.value !== 'former' && status.value !== 'upcoming'}> 
+                          {/* Allow former to become upcoming, but not directly active from form */}
                           {status.label}
                         </SelectItem>
                       ))}

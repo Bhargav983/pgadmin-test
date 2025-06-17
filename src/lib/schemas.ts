@@ -7,7 +7,7 @@ export const RoomSchema = z.object({
   rent: z.coerce.number().min(0, { message: "Rent must be a positive number." }),
 });
 
-export const ResidentStatusSchema = z.enum(['active', 'upcoming']);
+export const ResidentStatusSchema = z.enum(['active', 'upcoming', 'former']);
 
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
