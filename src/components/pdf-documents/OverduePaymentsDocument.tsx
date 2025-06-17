@@ -3,11 +3,10 @@
 
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
-import type { Resident, Room } from "@/lib/types";
 
 // If you need custom fonts, register them here. Example:
-// Font.register({ 
-//   family: 'Open Sans', 
+// Font.register({
+//   family: 'Open Sans',
 //   fonts: [
 //     { src: 'https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-regular.ttf' },
 //     { src: 'https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-600.ttf', fontWeight: 600 }
@@ -15,16 +14,18 @@ import type { Resident, Room } from "@/lib/types";
 // });
 // Then use `fontFamily: 'Open Sans'` in styles. For now, we'll use default Helvetica.
 
-interface OverdueResidentForPdf extends Resident {
-  roomDetails?: Room;
+export interface OverdueResidentForPdf {
+  id: string;
+  name: string;
+  roomNumber: string;
   overdueAmount: number;
-  lastPaymentMonth?: string;
+  lastPaymentMonth: string;
 }
 
 interface OverduePaymentsDocumentProps {
   data: OverdueResidentForPdf[];
   totalOverdueAmount: number;
-  reportDate: string; 
+  reportDate: string;
 }
 
 const styles = StyleSheet.create({
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
   },
   tableColHeader: {
     // @ts-ignore
-    width: "25%", 
+    width: "25%",
     borderStyle: "solid",
     borderColor: '#cccccc',
     borderRightWidth: 1,
@@ -160,10 +161,10 @@ const OverduePaymentsDocument: React.FC<OverduePaymentsDocumentProps> = ({ data,
           </View>
           {/* Table Body */}
           {data.map((item) => (
-            item ? ( // Ensure item itself is not null/undefined
-              <View style={styles.tableRow} key={item.id || crypto.randomUUID()}>
+            item && item.id ? ( // Ensure item and item.id exists
+              <View style={styles.tableRow} key={item.id}>
                 <View style={styles.tableCol}><Text>{item.name || 'N/A'}</Text></View>
-                <View style={styles.tableCol}><Text>{item.roomDetails?.roomNumber || 'N/A'}</Text></View>
+                <View style={styles.tableCol}><Text>{item.roomNumber || 'N/A'}</Text></View>
                 <View style={styles.tableCol}><Text style={styles.currencyText}>₹{(item.overdueAmount || 0).toLocaleString()}</Text></View>
                 <View style={styles.tableCol}><Text>{item.lastPaymentMonth || 'N/A'}</Text></View>
               </View>

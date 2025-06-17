@@ -5,13 +5,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown } from "lucide-react";
-import type { Resident, Room, Payment, AttendanceRecord, AttendanceStatus } from "@/lib/types";
+import type { Resident, Room, Payment, AttendanceRecord } from "@/lib/types"; // Removed AttendanceStatus as it's not directly used here for types
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import OverduePaymentsDocument from '@/components/pdf-documents/OverduePaymentsDocument';
+import type { OverdueResidentForPdf } from '@/components/pdf-documents/OverduePaymentsDocument';
 
 
 const getStoredData = <T,>(key: string): T[] => {
@@ -31,7 +32,7 @@ interface ReportSummaries {
   overduePaymentsAmount: number;
   collectedThisMonthAmount: number;
   recentPayments: (Payment & { residentName: string; roomNumber: string })[];
-  overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[];
+  overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[]; // Keep original for calculations
   // Attendance related
   presentToday: number;
   lateToday: number;
@@ -82,8 +83,8 @@ export default function BillingPage() {
     const rooms = getStoredData<Room>('pgRooms');
     const allAttendanceRecords = getStoredData<AttendanceRecord>('pgAttendanceRecords');
 
-    const currentDate = new Date(); 
-    setCurrentDisplayDate(currentDate); 
+    const currentDate = new Date();
+    setCurrentDisplayDate(currentDate);
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
     const todayFormatted = format(startOfDay(currentDate), 'yyyy-MM-dd');
@@ -102,13 +103,13 @@ export default function BillingPage() {
       resident.payments.forEach(p => {
         allPayments.push({ ...p, residentName: resident.name, roomNumber: room.roomNumber });
       });
-      
+
       const paymentThisMonth = resident.payments.find(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id);
       if (paymentThisMonth) {
         const totalPaidCurrentMonth = resident.payments
             .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
             .reduce((sum, p) => sum + p.amount, 0);
-        
+
         collectedThisMonthTotal += totalPaidCurrentMonth;
         if (totalPaidCurrentMonth < room.rent) {
             upcomingTotal += (room.rent - totalPaidCurrentMonth);
@@ -122,7 +123,7 @@ export default function BillingPage() {
 
       resident.payments
         .filter(p => p.roomId === room.id)
-        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .forEach(p => {
           const paymentsForItsPeriod = resident.payments.filter(pm => pm.month === p.month && pm.year === p.year && pm.roomId === room.id);
           const totalPaidForItsPeriod = paymentsForItsPeriod.reduce((sum, payment) => sum + payment.amount, 0);
@@ -133,13 +134,13 @@ export default function BillingPage() {
              }
           }
         });
-      
+
       let firstCheckYear, firstCheckMonth;
-      if (lastFullyPaidPeriod.year === 0) { 
-        const earliestPayment = resident.payments.length > 0 ? 
+      if (lastFullyPaidPeriod.year === 0) {
+        const earliestPayment = resident.payments.length > 0 ?
             resident.payments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
             : null;
-        
+
         if (earliestPayment) {
             firstCheckYear = earliestPayment.year;
             firstCheckMonth = earliestPayment.month;
@@ -155,16 +156,16 @@ export default function BillingPage() {
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
         const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; 
-        
+        const monthEnd = (y < currentYear) ? 12 : currentMonth -1;
+
         for (let m = monthStart; m <= monthEnd; m++) {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) {
-             continue; 
+             continue;
            }
 
            const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
            const amountPaidThisMonth = paymentsForThisSpecificMonth.reduce((acc, curr) => acc + curr.amount, 0);
-           
+
            if (amountPaidThisMonth < room.rent) {
                totalDueFromResident += (room.rent - amountPaidThisMonth);
            }
@@ -173,9 +174,9 @@ export default function BillingPage() {
 
       if (totalDueFromResident > 0) {
         overdueTotal += totalDueFromResident;
-        overdueResidentsList.push({ 
-          ...resident, 
-          roomDetails: room, 
+        overdueResidentsList.push({
+          ...resident,
+          roomDetails: room,
           overdueAmount: totalDueFromResident,
           lastPaymentMonth: lastFullyPaidPeriod.month > 0 ? `${staticMonths[lastFullyPaidPeriod.month-1]} ${lastFullyPaidPeriod.year}` : 'Never Fully Paid'
         });
@@ -186,7 +187,7 @@ export default function BillingPage() {
     // --- Attendance Calculations ---
     let presentToday = 0, lateToday = 0, absentToday = 0, onLeaveToday = 0, pendingToday = 0;
     const attendanceForToday = allAttendanceRecords.filter(ar => ar.date === todayFormatted);
-    
+
     // Create a set of resident IDs who have an explicit record for today
     const residentsWithTodaysRecord = new Set(attendanceForToday.map(ar => ar.residentId));
 
@@ -244,13 +245,23 @@ export default function BillingPage() {
     );
   }
 
+  // Prepare simplified data for PDF
+  const preparedOverdueDataForPdf: OverdueResidentForPdf[] = reportSummaries.overdueResidents.map(res => ({
+    id: res.id,
+    name: res.name,
+    roomNumber: res.roomDetails?.roomNumber || 'N/A',
+    overdueAmount: res.overdueAmount,
+    lastPaymentMonth: res.lastPaymentMonth || 'N/A'
+  }));
+
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
         <h1 className="text-3xl font-headline font-semibold">Reports Overview</h1>
         <p className="text-sm text-muted-foreground">As of: {format(currentDisplayDate, 'PPP p')}</p>
       </div>
-      
+
       {/* Financial Summaries Section */}
       <section>
         <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Financial Summary</h2>
@@ -339,7 +350,7 @@ export default function BillingPage() {
           </Card>
         </div>
       </section>
-      
+
       {/* Detailed Tables Section */}
       <section>
         <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Detailed Logs</h2>
@@ -385,12 +396,12 @@ export default function BillingPage() {
                     <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
                     <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
                 </div>
-                {isClient && reportSummaries.overdueResidents.length > 0 && (
+                {isClient && preparedOverdueDataForPdf.length > 0 && (
                     <PDFDownloadLink
                     document={
-                        <OverduePaymentsDocument 
-                            data={reportSummaries.overdueResidents} 
-                            totalOverdueAmount={reportSummaries.overduePaymentsAmount} 
+                        <OverduePaymentsDocument
+                            data={preparedOverdueDataForPdf}
+                            totalOverdueAmount={reportSummaries.overduePaymentsAmount}
                             reportDate={`As of ${format(currentDisplayDate, 'PPP')}`}
                         />
                     }
@@ -457,4 +468,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
