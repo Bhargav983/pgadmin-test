@@ -60,7 +60,7 @@ export const PaymentSchema = z.object({
   month: z.coerce.number().int().min(1, "Month must be between 1 and 12").max(12, "Month must be between 1 and 12"),
   year: z.coerce.number().int().min(new Date().getFullYear() - 10, "Year seems too old").max(new Date().getFullYear() + 1, "Year seems too far in future"),
   amount: z.coerce.number().min(0.01, { message: "Amount must be greater than 0." }),
-  date: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid payment date." }), 
+  date: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid payment date." }),
   mode: PaymentModeSchema,
   notes: z.string().optional(),
 });
@@ -89,4 +89,14 @@ export const AttendanceFormValidationSchema = z.object({
       path: ["checkInTime"],
     });
   }
+});
+
+export const EmailConfigSchema = z.object({
+  emailBackend: z.string().optional(),
+  emailHost: z.string().min(1, "Email host is required."),
+  emailPort: z.coerce.number().int().min(1, "Port must be a positive integer.").max(65535, "Port number is too high."),
+  emailUseTls: z.boolean().default(true),
+  emailHostUser: z.string().email("Invalid email address for host user.").min(1, "Email host user is required."),
+  emailHostPassword: z.string().min(1, "Email host password is required."),
+  defaultFromEmail: z.string().email("Invalid default from email address.").min(1, "Default from email is required."),
 });

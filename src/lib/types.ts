@@ -1,4 +1,6 @@
 
+import type { z } from 'zod';
+import type { EmailConfigSchema } from './schemas';
 
 export type PaymentMode = 'Cash' | 'UPI' | 'Bank Transfer';
 export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
@@ -46,11 +48,11 @@ export interface Resident {
   id:string;
   name: string;
   contact: string;
-  enquiryDate?: string | null; 
-  joiningDate?: string | null; 
+  enquiryDate?: string | null;
+  joiningDate?: string | null;
   personalInfo?: string;
-  roomId: string | null; 
-  status: ResidentStatus; 
+  roomId: string | null;
+  status: ResidentStatus;
   payments: Payment[];
   activityLog: ActivityLogEntry[];
   photoUrl?: string | null;
@@ -70,7 +72,7 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   notes: string | null;
   // Denormalized data for easier display, captured at the time of record creation/update
-  residentNameAtTime: string; 
+  residentNameAtTime: string;
   roomNumberAtTime: string | null;
 }
 
@@ -79,6 +81,7 @@ export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
 export type AttendanceFormValues = Omit<AttendanceRecord, 'id' | 'residentId' | 'date' | 'residentNameAtTime' | 'roomNumberAtTime'>;
+export type EmailConfigFormValues = z.infer<typeof EmailConfigSchema>;
 
 
 // For receipt display
@@ -88,4 +91,3 @@ export interface ReceiptData {
   roomNumber: string;
   pgName?: string; // Optional, can be defaulted
 }
-
