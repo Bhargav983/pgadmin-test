@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -12,6 +13,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type RowSelectionState, // Added RowSelectionState
 } from "@tanstack/react-table";
 
 import {
@@ -36,7 +38,10 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   filterInputPlaceholder?: string;
-  filterColumn?: string; // id of the column to filter
+  filterColumn?: string; 
+  rowSelection?: RowSelectionState; // Added
+  onRowSelectionChange?: React.Dispatch<React.SetStateAction<RowSelectionState>>; // Added
+  enableRowSelection?: boolean; // Added
 }
 
 export function DataTable<TData, TValue>({
@@ -44,11 +49,20 @@ export function DataTable<TData, TValue>({
   data,
   filterInputPlaceholder = "Filter...",
   filterColumn,
+  rowSelection, // Added
+  onRowSelectionChange, // Added
+  enableRowSelection = false, // Added, default to false
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = React.useState({});
+  
+  // Use passed in rowSelection if provided (controlled component pattern)
+  const isRowSelectionControlled = rowSelection !== undefined && onRowSelectionChange !== undefined;
+  const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
+
+  const currentSelection = isRowSelectionControlled ? rowSelection : internalRowSelection;
+  const setCurrentSelection = isRowSelectionControlled ? onRowSelectionChange : setInternalRowSelection;
 
   const table = useReactTable({
     data,
@@ -60,19 +74,20 @@ export function DataTable<TData, TValue>({
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: setCurrentSelection, // Use the determined setter
+    enableRowSelection: enableRowSelection, // Pass to table options
     state: {
       sorting,
       columnFilters,
       columnVisibility,
-      rowSelection,
+      rowSelection: currentSelection, // Use the determined selection state
     },
   });
 
   return (
     <div className="w-full space-y-4">
-      {(filterColumn) && (
-        <div className="flex items-center py-4">
+      <div className="flex items-center py-4">
+        {(filterColumn) && (
           <Input
             placeholder={filterInputPlaceholder}
             value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
@@ -81,34 +96,34 @@ export function DataTable<TData, TValue>({
             }
             className="max-w-sm"
           />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto">
-                Columns <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="ml-auto">
+              Columns <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {table
+              .getAllColumns()
+              .filter((column) => column.getCanHide())
+              .map((column) => {
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    className="capitalize"
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(value) =>
+                      column.toggleVisibility(!!value)
+                    }
+                  >
+                    {column.id}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
@@ -160,10 +175,12 @@ export function DataTable<TData, TValue>({
         </Table>
       </div>
       <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
+        {enableRowSelection && (
+          <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+          </div>
+        )}
         <Button
           variant="outline"
           size="sm"

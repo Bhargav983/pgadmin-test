@@ -5,15 +5,16 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { DisplayAttendanceRecord, AttendanceStatus } from "./page"; 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox"; // Added Checkbox
 import { ArrowUpDown, Edit3 } from "lucide-react";
 
 const getStatusBadgeVariant = (status: AttendanceStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'Present': return 'secondary'; // Greenish/Positive
-      case 'Late': return 'default'; // Bluish/Neutral
+      case 'Present': return 'secondary';
+      case 'Late': return 'default'; 
       case 'Absent': return 'destructive';
       case 'On Leave': return 'outline';
-      case 'Pending': return 'outline'; // Or a more distinct color for pending
+      case 'Pending': return 'outline'; 
       default: return 'outline';
     }
   };
@@ -23,7 +24,7 @@ const getStatusBadgeStyle = (status: AttendanceStatus): React.CSSProperties => {
         case 'Present': return { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
         case 'Late': return { backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))'};
         case 'Absent': return { backgroundColor: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))'};
-        case 'On Leave': return { borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }; // standard outline
+        case 'On Leave': return { borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' };
         case 'Pending': return { borderColor: 'hsl(var(--muted-foreground))', color: 'hsl(var(--muted-foreground))' };
         default: return {};
     }
@@ -32,6 +33,30 @@ const getStatusBadgeStyle = (status: AttendanceStatus): React.CSSProperties => {
 export const getAttendanceColumns = (
   onOpenForm: (record: DisplayAttendanceRecord) => void
 ): ColumnDef<DisplayAttendanceRecord>[] => [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+        className="translate-y-[2px]"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+        className="translate-y-[2px]"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "residentName",
     header: ({ column }) => (

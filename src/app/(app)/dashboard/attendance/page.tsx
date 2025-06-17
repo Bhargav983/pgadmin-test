@@ -1,19 +1,29 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { RowSelectionState } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getAttendanceColumns } from "./attendance-columns";
 import type { Resident, Room, AttendanceRecord, AttendanceFormValues, AttendanceStatus } from "@/lib/types";
 import { AttendanceFormDialog } from "@/components/attendance-form-dialog";
+import { BulkAttendanceUpdateDialog, type BulkAttendanceUpdateValues } from "@/components/bulk-attendance-update-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, ClipboardCheck } from "lucide-react";
-import { format, parse, isValid, startOfDay } from 'date-fns';
+import { CalendarIcon, ClipboardCheck, Users } from "lucide-react";
+import { format, startOfDay } from 'date-fns';
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ATTENDANCE_STORAGE_KEY = 'pgAttendanceRecords';
 
@@ -33,19 +43,17 @@ const setStoredData = <T,>(key: string, data: T[]): void => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
-// Represents the data structure for each row in the attendance table
 export interface DisplayAttendanceRecord {
   residentId: string;
   residentName: string;
   roomNumber: string | null;
-  date: string; // YYYY-MM-DD
+  date: string; 
   checkInTime: string | null;
   checkOutTime: string | null;
   status: AttendanceStatus;
   notes: string | null;
-  // Raw underlying objects for actions
   resident: Resident;
-  attendanceRecord?: AttendanceRecord; // Will be undefined if no record exists yet for the day
+  attendanceRecord?: AttendanceRecord; 
 }
 
 export default function AttendancePage() {
@@ -54,9 +62,12 @@ export default function AttendancePage() {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [displayRecords, setDisplayRecords] = useState<DisplayAttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAttendanceTarget, setEditingAttendanceTarget] = useState<{ resident: Resident, existingRecord?: AttendanceRecord } | null>(null);
+
+  const [isBulkFormOpen, setIsBulkFormOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -96,7 +107,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     fetchDataAndProcess();
-    const handleStorageChange = () => fetchDataAndProcess(); // Listen for changes if other tabs modify residents/rooms
+    const handleStorageChange = () => fetchDataAndProcess();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchDataAndProcess]);
@@ -139,10 +150,63 @@ export default function AttendancePage() {
     toast({ title: "Attendance Updated", description: `Attendance for ${resident.name} on ${formattedSelectedDate} saved.` });
     setIsFormOpen(false);
     setEditingAttendanceTarget(null);
-    fetchDataAndProcess(); // Refresh table
+    fetchDataAndProcess(); 
   };
   
-  const columns = getAttendanceColumns(handleOpenForm);
+  const columns = useMemo(() => getAttendanceColumns(handleOpenForm), [handleOpenForm]);
+
+  const getSelectedDisplayRecords = useCallback(() => {
+    return Object.keys(rowSelection)
+      .filter(indexStr => rowSelection[indexStr])
+      .map(indexStr => displayRecords[parseInt(indexStr)])
+      .filter(Boolean); 
+  }, [rowSelection, displayRecords]);
+
+  const handleBulkUpdateRecords = (updates: Partial<BulkAttendanceUpdateValues>) => {
+    const selectedRecords = getSelectedDisplayRecords();
+    if (selectedRecords.length === 0) {
+      toast({ title: "No Residents Selected", description: "Please select residents to update.", variant: "destructive" });
+      return;
+    }
+
+    let allAttendanceRecords = getStoredData<AttendanceRecord>(ATTENDANCE_STORAGE_KEY);
+    const formattedSelectedDate = format(selectedDate, 'yyyy-MM-dd');
+    let updatedCount = 0;
+
+    selectedRecords.forEach(displayRecord => {
+      const recordId = `${displayRecord.residentId}-${formattedSelectedDate}`;
+      const existingRecordIndex = allAttendanceRecords.findIndex(ar => ar.id === recordId);
+      const room = allRooms.find(r => r.id === displayRecord.resident.roomId);
+
+      const newRecordData: AttendanceRecord = {
+        id: recordId,
+        residentId: displayRecord.residentId,
+        date: formattedSelectedDate,
+        checkInTime: 'checkInTime' in updates ? (updates.checkInTime || null) : (existingRecordIndex > -1 ? allAttendanceRecords[existingRecordIndex].checkInTime : null),
+        checkOutTime: 'checkOutTime' in updates ? (updates.checkOutTime || null) : (existingRecordIndex > -1 ? allAttendanceRecords[existingRecordIndex].checkOutTime : null),
+        status: updates.status || (existingRecordIndex > -1 ? allAttendanceRecords[existingRecordIndex].status : 'Pending'),
+        notes: 'notes' in updates ? (updates.notes || null) : (existingRecordIndex > -1 ? allAttendanceRecords[existingRecordIndex].notes : null),
+        residentNameAtTime: displayRecord.residentName,
+        roomNumberAtTime: room?.roomNumber || null,
+      };
+      
+      if (existingRecordIndex > -1) {
+        allAttendanceRecords[existingRecordIndex] = newRecordData;
+      } else {
+        allAttendanceRecords.push(newRecordData);
+      }
+      updatedCount++;
+    });
+
+    setStoredData(ATTENDANCE_STORAGE_KEY, allAttendanceRecords);
+    toast({ title: "Bulk Update Successful", description: `Updated attendance for ${updatedCount} resident(s).` });
+    fetchDataAndProcess(); 
+    setRowSelection({}); 
+    setIsBulkFormOpen(false);
+  };
+
+
+  const selectedCount = getSelectedDisplayRecords().length;
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -181,8 +245,39 @@ export default function AttendancePage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="font-headline">Attendance for {format(selectedDate, 'PPP')}</CardTitle>
-          <CardDescription>Log and view check-in/check-out times and status for active residents.</CardDescription>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <CardTitle className="font-headline">Attendance for {format(selectedDate, 'PPP')}</CardTitle>
+              <CardDescription>Log and view check-in/check-out times and status for active residents.</CardDescription>
+            </div>
+            {selectedCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground">{selectedCount} selected</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">Bulk Actions <Users className="ml-2 h-4 w-4" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Apply to Selected</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleBulkUpdateRecords({ status: 'Present', checkInTime: format(new Date(), 'HH:mm') })}>
+                      Mark Present (Now)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkUpdateRecords({ status: 'Absent', checkInTime: null, checkOutTime: null })}>
+                      Mark Absent
+                    </DropdownMenuItem>
+                     <DropdownMenuItem onClick={() => handleBulkUpdateRecords({ status: 'On Leave', checkInTime: null, checkOutTime: null })}>
+                      Mark On Leave
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setIsBulkFormOpen(true)}>
+                      Update Times/Status/Notes...
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -190,7 +285,15 @@ export default function AttendancePage() {
               <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
             </div>
           ) : displayRecords.length > 0 ? (
-            <DataTable columns={columns} data={displayRecords} filterColumn="residentName" filterInputPlaceholder="Filter by resident name..." />
+            <DataTable 
+              columns={columns} 
+              data={displayRecords} 
+              filterColumn="residentName" 
+              filterInputPlaceholder="Filter by resident name..."
+              rowSelection={rowSelection}
+              onRowSelectionChange={setRowSelection}
+              enableRowSelection={true} 
+            />
           ) : (
             <p className="text-muted-foreground text-center py-8">No active residents found to display attendance for.</p>
           )}
@@ -214,6 +317,15 @@ export default function AttendancePage() {
               }
             : { status: 'Pending', checkInTime: null, checkOutTime: null, notes: null }
           }
+        />
+      )}
+      {isBulkFormOpen && selectedCount > 0 && (
+        <BulkAttendanceUpdateDialog
+          isOpen={isBulkFormOpen}
+          onClose={() => setIsBulkFormOpen(false)}
+          onSubmit={handleBulkUpdateRecords}
+          numSelected={selectedCount}
+          currentDate={format(selectedDate, 'yyyy-MM-dd')}
         />
       )}
     </div>
