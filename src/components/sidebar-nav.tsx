@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BedDouble, Users, Cog, BadgeDollarSign } from "lucide-react";
+import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -19,7 +19,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/rooms", label: "Rooms", icon: BedDouble },
   { href: "/dashboard/residents", label: "Residents", icon: Users },
-  { href: "/dashboard/billing", label: "Billing", icon: BadgeDollarSign },
+  { href: "/dashboard/billing", label: "Billing", icon: IndianRupee },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];
 

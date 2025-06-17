@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, Users, BedDouble, DollarSign } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Users, BedDouble, IndianRupee } from "lucide-react";
 
 interface RoomCardProps {
   room: Room;
@@ -80,7 +80,7 @@ export function RoomCard({ room, onEdit, onDelete }: RoomCardProps) {
           <Users className="mr-2 h-4 w-4 text-primary" /> Occupancy: <span className="font-medium text-foreground ml-1">{room.currentOccupancy} / {room.capacity}</span>
         </div>
         <div className="flex items-center text-muted-foreground">
-          <DollarSign className="mr-2 h-4 w-4 text-primary" /> Rent: <span className="font-medium text-foreground ml-1">₹{room.rent.toLocaleString()}</span>
+          <IndianRupee className="mr-2 h-4 w-4 text-primary" /> Rent: <span className="font-medium text-foreground ml-1">₹{room.rent.toLocaleString()}</span>
         </div>
       </CardContent>
       {/* Footer can be used for quick actions or additional summary if needed in future */}

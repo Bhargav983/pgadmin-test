@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BadgeDollarSign, Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { BadgeIndianRupee, Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
 import type { Resident, Room, Payment } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -302,7 +302,7 @@ export default function BillingPage() {
 
       <Card className="shadow-lg mt-6">
         <CardHeader className="flex flex-row items-center space-x-2">
-          <BadgeDollarSign className="h-6 w-6 text-primary" />
+          <BadgeIndianRupee className="h-6 w-6 text-primary" />
           <CardTitle className="font-headline">Billing System Status</CardTitle>
         </CardHeader>
         <CardContent>

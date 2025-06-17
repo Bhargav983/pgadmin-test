@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BedDouble, Users, DollarSign, UserPlus, UserX } from "lucide-react"; 
+import { BedDouble, Users, IndianRupee, UserPlus, UserX } from "lucide-react"; 
 import type { Room, Resident } from "@/lib/types";
 import Link from 'next/link';
 
@@ -83,7 +83,7 @@ export default function DashboardPage() {
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Expected Monthly Rent</CardTitle>
-            <DollarSign className="h-5 w-5 text-accent" />
+            <IndianRupee className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalRent.toLocaleString()}</div>
