@@ -84,12 +84,12 @@ export function RoomForm({ isOpen, onClose, onSubmit, defaultValues, isEditing }
           <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-4">
             <FormField
               control={form.control}
-              name="roomNumber"
+              name="floorNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Room Number</FormLabel>
+                  <FormLabel>Floor Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 101, G-02" {...field} />
+                    <Input type="number" placeholder="e.g., 0 for Ground, 1 for First" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -97,12 +97,12 @@ export function RoomForm({ isOpen, onClose, onSubmit, defaultValues, isEditing }
             />
             <FormField
               control={form.control}
-              name="floorNumber"
+              name="roomNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Floor Number</FormLabel>
+                  <FormLabel>Room Number</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 0 for Ground, 1 for First" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
+                    <Input placeholder="e.g., 101, G-02" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
