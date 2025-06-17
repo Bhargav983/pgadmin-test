@@ -1,6 +1,6 @@
 
 import { z } from 'zod';
-import { complaintCategories } from './types';
+import { complaintCategories, enquiryStatuses } from './types';
 import type { RecipientType } from './types';
 
 export const RoomSchema = z.object({
@@ -166,3 +166,24 @@ export const VacateResidentSchema = z.object({
     confirmNoClaims: z.boolean().refine(val => val === true, { message: "You must confirm no claims/damages."}),
 });
 
+export const EnquiryStatusZodEnum = z.enum(enquiryStatuses);
+
+export const EnquirySchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters.").max(100, "Name is too long."),
+  contact: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid contact number format. Include country code if needed (e.g., +91XXXXXXXXXX or XXXXXXXXXX)."),
+  email: z.string().email("Invalid email address.").nullable().optional().or(z.literal("")),
+  enquiryDate: z.string().refine((val) => val && !isNaN(Date.parse(val)), { message: "Valid enquiry date is required." }),
+  status: EnquiryStatusZodEnum.default('New'),
+  notes: z.string().max(500, "Notes are too long.").nullable().optional(),
+  nextFollowUpDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
+    message: "Invalid next follow-up date.",
+  }),
+}).superRefine((data, ctx) => {
+  if (data.nextFollowUpDate && data.enquiryDate && new Date(data.nextFollowUpDate) < new Date(data.enquiryDate)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Next follow-up date cannot be earlier than enquiry date.",
+      path: ["nextFollowUpDate"],
+    });
+  }
+});

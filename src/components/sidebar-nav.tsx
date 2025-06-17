@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard, ClipboardCheck, Wrench, Info, Megaphone } from "lucide-react"; // Added Megaphone
+import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard, ClipboardCheck, Wrench, Info, Megaphone, MessageSquare } from "lucide-react"; // Added Megaphone, MessageSquare
 
 interface NavItem {
   href: string;
@@ -23,7 +23,8 @@ const navItems: NavItem[] = [
   { href: "/dashboard/attendance", label: "Attendance Tracking", icon: ClipboardCheck },
   { href: "/dashboard/billing", label: "Reports", icon: IndianRupee },
   { href: "/dashboard/complaints", label: "Complaints", icon: Wrench },
-  { href: "/dashboard/announcements", label: "Announcements", icon: Megaphone }, // Added Announcements
+  { href: "/dashboard/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/dashboard/enquiries", label: "Enquiries", icon: MessageSquare }, // Added Enquiries
   { href: "/dashboard/general-info", label: "General Info", icon: Info },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];

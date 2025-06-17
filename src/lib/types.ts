@@ -117,6 +117,21 @@ export interface ImportantContact {
   contactNumber: string;
 }
 
+// For Enquiries
+export type EnquiryStatus = 'New' | 'Follow-up' | 'Converted' | 'Closed';
+export const enquiryStatuses: EnquiryStatus[] = ['New', 'Follow-up', 'Converted', 'Closed'];
+
+export interface Enquiry {
+  id: string;
+  name: string;
+  contact: string;
+  email?: string | null;
+  enquiryDate: string; // ISO Date string
+  status: EnquiryStatus;
+  notes?: string | null;
+  nextFollowUpDate?: string | null; // ISO Date string
+}
+
 
 export type RoomFormValues = {
   roomNumber: string;
@@ -139,6 +154,8 @@ export type ComplaintFormValues = {
 };
 // For display in table, includes denormalized data
 export interface DisplayComplaint extends Complaint {}
+
+export type EnquiryFormValues = Omit<Enquiry, 'id'>;
 
 
 // For receipt display
