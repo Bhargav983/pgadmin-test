@@ -3,6 +3,24 @@ export type PaymentMode = 'Cash' | 'UPI' | 'Bank Transfer';
 export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
 export type ResidentStatus = 'active' | 'upcoming' | 'former';
 
+export type ActivityType =
+  | 'RESIDENT_CREATED'
+  | 'DETAILS_UPDATED'
+  | 'ROOM_ASSIGNED'
+  | 'PAYMENT_RECORDED'
+  | 'ROOM_TRANSFERRED'
+  | 'VACATED'
+  | 'ACTIVATED'
+  | 'REACTIVATED';
+
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: string; // ISO Date string
+  type: ActivityType;
+  description: string;
+  details?: Record<string, any>;
+}
+
 export interface Payment {
   id: string; // Unique ID for the payment transaction
   receiptId?: string; // Unique ID for the generated receipt
@@ -11,7 +29,7 @@ export interface Payment {
   amount: number;
   date: string; // ISO string format for date
   mode: PaymentMode;
-  roomId: string; // ID of the room for which payment was made
+  roomId: string; // ID of the room for which payment was made at the time of payment
   notes?: string;
 }
 
@@ -24,17 +42,20 @@ export interface Room {
 }
 
 export interface Resident {
-  id: string;
+  id:string;
   name: string;
   contact: string;
+  enquiryDate?: string | null; // ISO string format for date, optional
+  joiningDate?: string | null; // ISO string format for date, optional
   personalInfo?: string;
-  roomId: string | null; // ID of the room they are assigned to
+  roomId: string | null; // ID of the room they are currently assigned to
   status: ResidentStatus; // 'active', 'upcoming', or 'former'
   payments: Payment[];
+  activityLog: ActivityLogEntry[];
 }
 
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
-export type ResidentFormValues = Omit<Resident, 'id' | 'payments'>;
+export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
 
 // For receipt display

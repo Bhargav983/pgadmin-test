@@ -12,16 +12,28 @@ export const ResidentStatusSchema = z.enum(['active', 'upcoming', 'former']);
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
   contact: z.string().min(1, { message: "Contact information is required." }),
+  enquiryDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
+    message: "Invalid enquiry date.",
+  }),
+  joiningDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
+    message: "Invalid joining date.",
+  }),
   personalInfo: z.string().optional(),
-  roomId: z.string().nullable(), // Allow null, specific validation below
+  roomId: z.string().nullable(), 
   status: ResidentStatusSchema,
-  // payments array is managed internally, not part of this form schema
 }).superRefine((data, ctx) => {
   if (data.status === 'active' && !data.roomId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Active residents must be assigned to a room.",
-      path: ["roomId"], // Point error to roomId field
+      path: ["roomId"], 
+    });
+  }
+  if (data.joiningDate && data.enquiryDate && new Date(data.joiningDate) < new Date(data.enquiryDate)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Joining date cannot be earlier than enquiry date.",
+      path: ["joiningDate"],
     });
   }
 });
@@ -41,4 +53,3 @@ export const PaymentSchema = z.object({
   mode: PaymentModeSchema,
   notes: z.string().optional(),
 });
-

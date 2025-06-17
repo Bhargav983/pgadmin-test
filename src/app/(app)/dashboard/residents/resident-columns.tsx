@@ -1,6 +1,7 @@
 
 "use client";
 
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Resident, Room } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CreditCard, Repeat, UserX, UserCheck, RotateCcw } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CreditCard, Repeat, UserX, UserCheck, RotateCcw, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const getCurrentMonthPaymentStatus = (resident: Resident, rooms: Room[]): { status: string, variant: "default" | "secondary" | "destructive" | "outline", rentAmount: number | null } => {
@@ -21,7 +22,7 @@ const getCurrentMonthPaymentStatus = (resident: Resident, rooms: Room[]): { stat
   const currentYear = currentDate.getFullYear();
 
   const assignedRoom = rooms.find(room => room.id === resident.roomId);
-  if (!assignedRoom || resident.status !== 'active') { // Only active residents have payment status
+  if (!assignedRoom || resident.status !== 'active') { 
     return { status: "N/A", variant: "outline", rentAmount: null };
   }
 
@@ -35,6 +36,18 @@ const getCurrentMonthPaymentStatus = (resident: Resident, rooms: Room[]): { stat
   }
   return { status: "Due", variant: "destructive", rentAmount };
 };
+
+const NameCell = ({ row }: { row: { original: Resident, getValue: (key: string) => any } }) => {
+  const resident = row.original;
+  return (
+    <Button variant="link" className="p-0 h-auto font-medium" asChild>
+      <Link href={`/dashboard/residents/${resident.id}`}>
+        {row.getValue("name")}
+      </Link>
+    </Button>
+  );
+};
+
 
 // --- Active Resident Columns ---
 export const getActiveResidentColumns = (
@@ -50,7 +63,7 @@ export const getActiveResidentColumns = (
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Name<ArrowUpDown className="ml-2 h-4 w-4" /></Button>
     ),
-    cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+    cell: NameCell,
   },
   { accessorKey: "contact", header: "Contact" },
   {
@@ -92,6 +105,7 @@ export const getActiveResidentColumns = (
           <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Open menu</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
             <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRecordPayment(resident)} disabled={!resident.roomId}><CreditCard className="mr-2 h-4 w-4" /> Record Payment</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onTransfer(resident)} disabled={!resident.roomId}><Repeat className="mr-2 h-4 w-4" /> Transfer Room</DropdownMenuItem>
@@ -117,7 +131,7 @@ export const getUpcomingResidentColumns = (
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Name<ArrowUpDown className="ml-2 h-4 w-4" /></Button>
     ),
-    cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+    cell: NameCell,
   },
   { accessorKey: "contact", header: "Contact" },
   {
@@ -146,6 +160,7 @@ export const getUpcomingResidentColumns = (
           <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Open menu</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
             <DropdownMenuItem onClick={() => onActivate(resident)} className="text-green-600 focus:text-green-700 focus:bg-green-100"><UserCheck className="mr-2 h-4 w-4" /> Activate Resident</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -168,7 +183,7 @@ export const getFormerResidentColumns = (
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Name<ArrowUpDown className="ml-2 h-4 w-4" /></Button>
     ),
-    cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+    cell: NameCell,
   },
   { accessorKey: "contact", header: "Contact" },
   {
@@ -188,8 +203,9 @@ export const getFormerResidentColumns = (
           <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Open menu</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
             <DropdownMenuItem onClick={() => onReactivate(resident)} className="text-blue-600 focus:text-blue-700 focus:bg-blue-100"><RotateCcw className="mr-2 h-4 w-4" /> Reactivate (to Upcoming)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> View/Edit Details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Record</DropdownMenuItem>
           </DropdownMenuContent>

@@ -30,6 +30,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
 import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/types";
 
@@ -54,6 +59,8 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
     defaultValues: {
       name: defaultValues?.name || "",
       contact: defaultValues?.contact || "",
+      enquiryDate: defaultValues?.enquiryDate || null,
+      joiningDate: defaultValues?.joiningDate || null,
       personalInfo: defaultValues?.personalInfo || "",
       roomId: defaultValues?.roomId || null,
       status: defaultValues?.status || "upcoming",
@@ -66,19 +73,27 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
         form.reset({
           name: defaultValues.name || "",
           contact: defaultValues.contact || "",
+          enquiryDate: defaultValues.enquiryDate || null,
+          joiningDate: defaultValues.joiningDate || null,
           personalInfo: defaultValues.personalInfo || "",
           roomId: defaultValues.roomId || null,
           status: defaultValues.status || (isEditing ? "active" : "upcoming"),
         });
-      } else { // For adding new resident
-        form.reset({ name: "", contact: "", personalInfo: "", roomId: null, status: "upcoming" });
+      } else { 
+        form.reset({ name: "", contact: "", enquiryDate: null, joiningDate: null, personalInfo: "", roomId: null, status: "upcoming" });
       }
     }
   }, [defaultValues, form, isOpen, isEditing]);
 
 
   const handleFormSubmit = async (values: ResidentFormValues) => {
-    await onSubmit(values);
+    // Ensure empty strings for dates are converted to null
+    const processedValues = {
+      ...values,
+      enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
+      joiningDate: values.joiningDate === "" ? null : values.joiningDate,
+    };
+    await onSubmit(processedValues);
   };
 
   return (
@@ -118,6 +133,84 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                 </FormItem>
               )}
             />
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <FormField
+                control={form.control}
+                name="enquiryDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Enquiry Date (Optional)</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(new Date(field.value), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value ? new Date(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date ? date.toISOString().split('T')[0] : null)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="joiningDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Joining Date (Optional)</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(new Date(field.value), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value ? new Date(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date ? date.toISOString().split('T')[0] : null)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="roomId"
@@ -127,7 +220,7 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                   <Select 
                     onValueChange={field.onChange} 
                     value={field.value || undefined} 
-                    disabled={form.getValues("status") === 'former'} // Disable room if former
+                    disabled={form.getValues("status") === 'former'} 
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -158,7 +251,7 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
-                      if (value === 'former') { // If status changed to former, unassign room
+                      if (value === 'former') { 
                         form.setValue('roomId', null);
                       }
                     }} 
@@ -171,7 +264,6 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                     <SelectContent>
                       {residentStatuses.map((status) => (
                         <SelectItem key={status.value} value={status.value} disabled={isEditing && defaultValues?.status === 'former' && status.value !== 'former' && status.value !== 'upcoming'}> 
-                          {/* Allow former to become upcoming, but not directly active from form */}
                           {status.label}
                         </SelectItem>
                       ))}
