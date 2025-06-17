@@ -57,7 +57,7 @@ export interface Room {
 export interface Resident {
   id:string;
   name: string;
-  email: string; 
+  email: string;
   contact: string;
   enquiryDate?: string | null;
   joiningDate?: string | null;
@@ -66,8 +66,8 @@ export interface Resident {
   status: ResidentStatus;
   payments: Payment[];
   activityLog: ActivityLogEntry[];
-  photoUrl?: string | null; 
-  idProofUrl?: string | null; 
+  photoUrl?: string | null;
+  idProofUrl?: string | null;
   guardianName?: string | null;
   guardianContact?: string | null;
   monthlyDiscountAmount?: number | null;
@@ -110,8 +110,8 @@ export interface Complaint {
 
 // For General Info Page
 export interface Holiday {
-  id: string; 
-  date: string; 
+  id: string;
+  date: string;
   reason: string;
 }
 
@@ -155,7 +155,7 @@ export type ComplaintFormValues = {
   category: ComplaintCategory | string;
   customCategory?: string; // For when category is 'Other'
   description: string;
-  status: ComplaintStatus; 
+  status: ComplaintStatus;
   resolutionNotes?: string | null;
 };
 // For display in table, includes denormalized data
@@ -188,4 +188,17 @@ export interface VacateResidentFormValues {
     reasonForLeaving: string;
     confirmNoDues: boolean;
     confirmNoClaims: boolean;
+}
+
+// For Profile Page
+export interface ProfileInfoFormValues {
+  name: string;
+  email: string; // Usually read-only from auth, but can be part of the form
+  photoUrl?: string | null;
+}
+
+export interface ChangePasswordFormValues {
+  currentPassword?: string; // Optional if backend supports password change without current one (e.g. for first time setup or admin override)
+  newPassword: string;
+  confirmNewPassword: string;
 }

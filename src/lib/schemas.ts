@@ -17,7 +17,7 @@ const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
-  email: z.string().email({ message: "Invalid email address." }), 
+  email: z.string().email({ message: "Invalid email address." }),
   contact: z.string().min(1, { message: "Contact information is required." }),
   enquiryDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
     message: "Invalid enquiry date.",
@@ -205,4 +205,20 @@ export const EnquirySchema = z.object({
       path: ["nextFollowUpDate"],
     });
   }
+});
+
+// Profile Page Schemas
+export const ProfileInfoSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters.").max(50, "Name is too long."),
+  email: z.string().email("Invalid email address."), // Typically read-only but good to have in schema
+  photoUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).max(2 * 1024 * 1024, { message: "Photo image too large (max 2MB)." }).nullable().optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().optional(), // Optional for this simulation
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+  confirmNewPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmNewPassword, {
+  message: "New passwords do not match.",
+  path: ["confirmNewPassword"], // Point error to the confirm password field
 });
