@@ -1,15 +1,16 @@
+
 "use client";
 
 import type { ReactNode } from 'react';
 import { SiteHeader } from "@/components/site-header";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { useAuth } from '@/context/auth-context';
-import { useRouter } from 'next/navigation';
+// useRouter is no longer needed here as AuthProvider handles redirection
 import { Sidebar, SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  // const router = useRouter(); // Removed
 
   if (isLoading) {
     return (
@@ -20,11 +21,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    // This should ideally be handled by the AuthProvider, but as a fallback:
-    if (typeof window !== 'undefined') {
-      router.replace('/login');
-    }
-    return null; // or a loading/redirecting state
+    // The AuthProvider's useEffect hook will handle redirecting to /login.
+    // Returning null here prevents rendering the layout for unauthenticated users
+    // before the AuthProvider can redirect.
+    return null; 
   }
   
   return (
