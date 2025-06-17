@@ -41,7 +41,11 @@ export default function ResidentDetailPage() {
     const foundResident = allResidents.find(r => r.id === residentId);
     
     if (foundResident) {
-      setResident(foundResident);
+      setResident({
+        ...foundResident,
+        payments: Array.isArray(foundResident.payments) ? foundResident.payments : [],
+        activityLog: Array.isArray(foundResident.activityLog) ? foundResident.activityLog : [],
+      });
       setRooms(storedRooms);
     } else {
       setResident(null); // Handle resident not found
@@ -212,4 +216,3 @@ export default function ResidentDetailPage() {
     </div>
   );
 }
-
