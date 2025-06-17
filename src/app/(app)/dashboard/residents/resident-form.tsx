@@ -50,6 +50,7 @@ const residentStatuses: { value: ResidentStatus; label: string }[] = [
 
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 
 export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRooms, onCancel }: ResidentFormProps) {
   const { toast } = useToast();
@@ -63,8 +64,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       personalInfo: defaultValues?.personalInfo || "",
       roomId: defaultValues?.roomId || null,
       status: defaultValues?.status || "upcoming",
-      photoUrl: defaultValues?.photoUrl || null, // Will store Data URI
-      idProofUrl: defaultValues?.idProofUrl || null, // Will store Data URI
+      photoUrl: defaultValues?.photoUrl || null,
+      idProofUrl: defaultValues?.idProofUrl || null,
       guardianName: defaultValues?.guardianName || "",
       guardianContact: defaultValues?.guardianContact || "",
     },
@@ -103,7 +104,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
           description: `Please select an image smaller than ${MAX_FILE_SIZE_MB}MB.`,
           variant: "destructive",
         });
-        event.target.value = ""; // Clear the input
+        event.target.value = ""; 
         return;
       }
       if (!file.type.startsWith("image/")) {
@@ -112,17 +113,17 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
           description: "Please select an image file (e.g., JPG, PNG, GIF).",
           variant: "destructive",
         });
-        event.target.value = ""; // Clear the input
+        event.target.value = ""; 
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         form.setValue(fieldName, reader.result as string);
-        form.trigger(fieldName); // Trigger validation for the field
+        form.trigger(fieldName); 
       };
       reader.readAsDataURL(file);
     } else {
-      form.setValue(fieldName, null); // Clear if no file selected or selection cancelled
+      form.setValue(fieldName, null); 
       form.trigger(fieldName);
     }
   };
@@ -132,10 +133,11 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       ...values,
       enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
       joiningDate: values.joiningDate === "" ? null : values.joiningDate,
-      photoUrl: values.photoUrl || null, // Already Data URI or null
-      idProofUrl: values.idProofUrl || null, // Already Data URI or null
+      photoUrl: values.photoUrl || null, 
+      idProofUrl: values.idProofUrl || null, 
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
+      // roomId is already correctly null or a string due to Select's onChange handling
     };
     await onSubmit(processedValues);
   };
@@ -378,8 +380,10 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 <FormItem>
                   <FormLabel>Assign Room</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value || ""} // Ensure value is string or undefined for Select
+                    onValueChange={(value) => {
+                      field.onChange(value === UNASSIGNED_ROOM_SENTINEL ? null : value);
+                    }}
+                    value={field.value === null || field.value === undefined ? UNASSIGNED_ROOM_SENTINEL : field.value}
                     disabled={form.getValues("status") === 'former'}
                   >
                     <FormControl>
@@ -388,7 +392,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                       <SelectItem value="">Unassigned</SelectItem> {/* Changed value from "null" to "" for Select */}
+                       <SelectItem value={UNASSIGNED_ROOM_SENTINEL}>Unassigned</SelectItem>
                       {availableRooms
                         .filter(room => room.id && room.id.trim() !== "")
                         .map((room) => (
@@ -412,7 +416,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                     onValueChange={(value) => {
                       field.onChange(value);
                       if (value === 'former') {
-                        form.setValue('roomId', null); // This is fine as it internally means unassign
+                        form.setValue('roomId', null); 
                       }
                     }}
                     value={field.value}>

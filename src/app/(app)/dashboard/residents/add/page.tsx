@@ -81,7 +81,7 @@ export default function AddResidentPage() {
         id: newResidentId,
         payments: [],
         activityLog: [], 
-        roomId: values.roomId === "null" ? null : values.roomId,
+        roomId: values.roomId, // Will be null or a string ID from ResidentForm
         status: values.status || 'upcoming',
         photoUrl: values.photoUrl || null,
         idProofUrl: values.idProofUrl || null,
@@ -90,7 +90,7 @@ export default function AddResidentPage() {
       };
       
       let updatedResidents = [...allResidents, newResident];
-      setStoredData('pgResidents', updatedResidents); // Save first
+      setStoredData('pgResidents', updatedResidents); 
 
       const roomNumber = values.roomId ? availableRooms.find(r=>r.id === values.roomId)?.roomNumber : 'Unassigned';
       updatedResidents = await addActivityLogEntry(updatedResidents, newResidentId, 'RESIDENT_CREATED', `Resident record created for ${values.name}. Status: ${values.status}. Room: ${roomNumber}.`, { ...values, roomNumber });

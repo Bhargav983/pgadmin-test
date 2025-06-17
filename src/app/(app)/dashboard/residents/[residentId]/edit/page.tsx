@@ -94,13 +94,13 @@ export default function EditResidentPage() {
         res.id === editingResident.id ? { 
           ...res, 
           ...values, 
-          roomId: values.roomId === "null" ? null : values.roomId,
+          roomId: values.roomId, // Will be null or a string ID from ResidentForm
           photoUrl: values.photoUrl || null,
           idProofUrl: values.idProofUrl || null,
           guardianName: values.guardianName || null,
           guardianContact: values.guardianContact || null,
-          payments: res.payments || [], // Preserve existing payments
-          activityLog: res.activityLog || [] // Preserve existing activity log
+          payments: res.payments || [], 
+          activityLog: res.activityLog || [] 
         } : res
       );
       setStoredData('pgResidents', updatedResidents);
@@ -118,17 +118,16 @@ export default function EditResidentPage() {
       
       toast({ title: "Resident Updated", description: `${values.name} has been updated.`, variant: "default" });
 
-      if (activateAfterSave && values.roomId && values.roomId !== "null") {
+      if (activateAfterSave && values.roomId) {
         updatedResidents = updatedResidents.map(res => 
             res.id === editingResident.id ? { ...res, status: 'active' as ResidentStatus } : res
         );
         setStoredData('pgResidents', updatedResidents);
         updatedResidents = await addActivityLogEntry(updatedResidents, editingResident.id, 'ACTIVATED', `${values.name} activated and assigned to room ${roomNumber}.`, { roomId: values.roomId, roomNumber });
         toast({ title: "Resident Activated", description: `${values.name} assigned room ${roomNumber} and is now active.` });
-      } else if (activateAfterSave && (!values.roomId || values.roomId === "null")) {
+      } else if (activateAfterSave && !values.roomId) {
         toast({ title: "Activation Pending", description: "Please assign a room to activate this resident. Save again after assigning.", variant: "default" });
-        // Don't navigate away, user needs to assign room
-        fetchResidentAndRooms(); // Re-fetch to update form if needed
+        fetchResidentAndRooms(); 
         return;
       }
       
