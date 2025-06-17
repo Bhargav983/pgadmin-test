@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
+import { useRouter, useSearchParams } from "next/navigation"; 
 import { ResidentForm } from "../resident-form";
 import type { Resident, ResidentFormValues, Room, ActivityType } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -28,13 +28,10 @@ const setStoredData = <T,>(key: string, data: T[]): void => {
 
 export default function AddResidentPage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Get search params
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
-
-  // Read initial room and floor from query params
-  const initialRoomIdFromQuery = searchParams.get('roomId');
-  const initialFloorNumberFromQuery = searchParams.get('floorNumber');
+  const [initialFormValues, setInitialFormValues] = useState<Partial<ResidentFormValues>>({});
 
   const fetchRooms = useCallback(() => {
     const storedRooms = getStoredData<Room>('pgRooms');
@@ -51,7 +48,27 @@ export default function AddResidentPage() {
 
   useEffect(() => {
     fetchRooms();
-  }, [fetchRooms]);
+
+    // Prepare initial values from query parameters (enquiry conversion or direct room assignment)
+    const defaultVals: Partial<ResidentFormValues> = {
+        status: 'upcoming', // Default status for new residents
+    };
+    const nameFromQuery = searchParams.get('name');
+    const contactFromQuery = searchParams.get('contact');
+    const emailFromQuery = searchParams.get('email');
+    const enquiryDateFromQuery = searchParams.get('enquiryDate');
+    const convertedFromEnquiryId = searchParams.get('convertedFromEnquiryId'); // Store for logging
+
+    if (nameFromQuery) defaultVals.name = nameFromQuery;
+    if (contactFromQuery) defaultVals.contact = contactFromQuery;
+    if (emailFromQuery) defaultVals.email = emailFromQuery;
+    if (enquiryDateFromQuery) defaultVals.enquiryDate = enquiryDateFromQuery;
+    // roomId and floorNumber are handled by separate props for ResidentForm for now
+    
+    setInitialFormValues(defaultVals);
+
+  }, [fetchRooms, searchParams]);
+
 
   const addActivityLogEntry = async (
     allResidents: Resident[],
@@ -87,7 +104,7 @@ export default function AddResidentPage() {
         payments: [],
         activityLog: [],
         roomId: values.roomId,
-        status: values.status || 'upcoming',
+        status: values.status || 'upcoming', // Ensure status is set
         photoUrl: values.photoUrl || null,
         idProofUrl: values.idProofUrl || null,
         guardianName: values.guardianName || null,
@@ -98,18 +115,30 @@ export default function AddResidentPage() {
       setStoredData('pgResidents', updatedResidents);
 
       const roomNumber = values.roomId ? availableRooms.find(r=>r.id === values.roomId)?.roomNumber : 'Unassigned';
-      updatedResidents = await addActivityLogEntry(updatedResidents, newResidentId, 'RESIDENT_CREATED', `Resident record created for ${values.name}. Status: ${values.status}. Room: ${roomNumber}.`, { ...values, roomNumber });
+      let creationDescription = `Resident record created for ${values.name}. Status: ${newResident.status}. Room: ${roomNumber}.`;
       
-      if(values.roomId && (values.status === 'active' || values.status === 'upcoming')){
+      const convertedFromEnquiryId = searchParams.get('convertedFromEnquiryId');
+      if (convertedFromEnquiryId) {
+        creationDescription += ` Converted from enquiry ID: ${convertedFromEnquiryId.substring(0,8)}.`;
+         updatedResidents = await addActivityLogEntry(updatedResidents, newResidentId, 'ENQUIRY_CONVERTED', `Converted from enquiry. Original Enquiry ID: ${convertedFromEnquiryId}`, { enquiryId: convertedFromEnquiryId });
+      }
+      
+      updatedResidents = await addActivityLogEntry(updatedResidents, newResidentId, 'RESIDENT_CREATED', creationDescription, { ...values, roomNumber });
+      
+      if(values.roomId && (newResident.status === 'active' || newResident.status === 'upcoming')){
          updatedResidents = await addActivityLogEntry(updatedResidents, newResidentId, 'ROOM_ASSIGNED', `Assigned to room: ${roomNumber}.`, { newRoomId: values.roomId, newRoomNumber: roomNumber });
       }
 
-      toast({ title: "Resident Added", description: `${newResident.name} has been added as ${values.status}.`, variant: "default" });
+      toast({ title: "Resident Added", description: `${newResident.name} has been added as ${newResident.status}.`, variant: "default" });
       router.push('/dashboard/residents');
     } catch (error) {
        toast({ title: "Error", description: "Failed to add resident.", variant: "destructive" });
     }
   };
+  
+  // Read initial room and floor from query params for direct add from room card
+  const initialRoomIdFromQuery = searchParams.get('roomId');
+  const initialFloorNumberFromQuery = searchParams.get('floorNumber');
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -130,8 +159,9 @@ export default function AddResidentPage() {
         isEditing={false}
         availableRooms={availableRooms}
         onCancel={() => router.push('/dashboard/residents')}
-        initialRoomId={initialRoomIdFromQuery} // Pass initial room ID
-        initialFloorNumber={initialFloorNumberFromQuery} // Pass initial floor number
+        defaultValues={initialFormValues} // Pass combined initial values
+        initialRoomId={initialRoomIdFromQuery} // For pre-selecting room from room card
+        initialFloorNumber={initialFloorNumberFromQuery} // For pre-selecting floor from room card
       />
     </div>
   );

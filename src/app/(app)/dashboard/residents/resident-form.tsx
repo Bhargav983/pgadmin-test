@@ -26,7 +26,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
 import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/types";
@@ -36,12 +36,12 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ResidentFormProps {
   onSubmit: (values: ResidentFormValues) => Promise<void>;
-  defaultValues?: Partial<Resident>;
+  defaultValues?: Partial<ResidentFormValues>; // Changed to ResidentFormValues
   isEditing: boolean;
   availableRooms: Room[];
   onCancel: () => void;
-  initialRoomId?: string | null; // New prop
-  initialFloorNumber?: string | null; // New prop
+  initialRoomId?: string | null; 
+  initialFloorNumber?: string | null; 
 }
 
 const residentStatuses: { value: ResidentStatus; label: string }[] = [
@@ -66,62 +66,74 @@ export function ResidentForm({
     initialFloorNumber
 }: ResidentFormProps) {
   const { toast } = useToast();
+  
+  // Initial form setup based on props
+  const getInitialFormState = React.useCallback(() => {
+    let baseDefaults: Partial<ResidentFormValues> = {
+      name: "",
+      email: "",
+      contact: "",
+      enquiryDate: null,
+      joiningDate: null,
+      personalInfo: "",
+      roomId: null,
+      status: isEditing ? "active" : "upcoming",
+      photoUrl: null,
+      idProofUrl: null,
+      guardianName: "",
+      guardianContact: "",
+    };
+
+    if (defaultValues) {
+      baseDefaults = {
+        ...baseDefaults,
+        ...defaultValues,
+        // Ensure dates from defaultValues (potentially from query params) are correctly formatted for the form
+        enquiryDate: defaultValues.enquiryDate && isValid(new Date(defaultValues.enquiryDate)) ? format(new Date(defaultValues.enquiryDate), 'yyyy-MM-dd') : null,
+        joiningDate: defaultValues.joiningDate && isValid(new Date(defaultValues.joiningDate)) ? format(new Date(defaultValues.joiningDate), 'yyyy-MM-dd') : null,
+      };
+    }
+    
+    if (initialRoomId) { // This comes from room card click
+        baseDefaults.roomId = initialRoomId;
+    }
+
+    return baseDefaults;
+  }, [defaultValues, isEditing, initialRoomId]);
+
+
   const form = useForm<ResidentFormValues>({
     resolver: zodResolver(ResidentSchema),
-    defaultValues: {
-      name: defaultValues?.name || "",
-      email: defaultValues?.email || "",
-      contact: defaultValues?.contact || "",
-      enquiryDate: defaultValues?.enquiryDate || null,
-      joiningDate: defaultValues?.joiningDate || null,
-      personalInfo: defaultValues?.personalInfo || "",
-      roomId: defaultValues?.roomId || initialRoomId || null, // Use initialRoomId if provided
-      status: defaultValues?.status || (isEditing ? "active" : "upcoming"),
-      photoUrl: defaultValues?.photoUrl || null,
-      idProofUrl: defaultValues?.idProofUrl || null,
-      guardianName: defaultValues?.guardianName || null,
-      guardianContact: defaultValues?.guardianContact || null,
-    },
+    defaultValues: getInitialFormState(),
   });
 
-  const [uiSelectedFloor, setUiSelectedFloor] = React.useState<string>(
-    initialFloorNumber || (defaultValues?.roomId ? availableRooms.find(r => r.id === defaultValues.roomId)?.floorNumber.toString() : SELECT_FLOOR_SENTINEL) || SELECT_FLOOR_SENTINEL
-  );
+  const [uiSelectedFloor, setUiSelectedFloor] = React.useState<string>(() => {
+    if (initialFloorNumber) return initialFloorNumber;
+    const currentDefaultValues = getInitialFormState();
+    if (currentDefaultValues.roomId) {
+      const room = availableRooms.find(r => r.id === currentDefaultValues.roomId);
+      return room ? room.floorNumber.toString() : SELECT_FLOOR_SENTINEL;
+    }
+    return SELECT_FLOOR_SENTINEL;
+  });
 
 
   React.useEffect(() => {
-    const effectiveInitialRoomId = initialRoomId || defaultValues?.roomId || null;
-    const effectiveStatus = defaultValues?.status || (isEditing ? "active" : "upcoming");
-    let effectiveFloor = SELECT_FLOOR_SENTINEL;
+    const newDefaultValues = getInitialFormState();
+    form.reset(newDefaultValues);
 
-    if (initialFloorNumber) {
+    let effectiveFloor = SELECT_FLOOR_SENTINEL;
+    if (initialFloorNumber) { // From room card click
         effectiveFloor = initialFloorNumber;
-    } else if (effectiveInitialRoomId) {
-        const assignedRoom = availableRooms.find(r => r.id === effectiveInitialRoomId);
+    } else if (newDefaultValues.roomId) { // From editing or enquiry conversion
+        const assignedRoom = availableRooms.find(r => r.id === newDefaultValues.roomId);
         if (assignedRoom) {
             effectiveFloor = assignedRoom.floorNumber.toString();
         }
     }
-
-
-    form.reset({
-      name: defaultValues?.name || "",
-      email: defaultValues?.email || "",
-      contact: defaultValues?.contact || "",
-      enquiryDate: defaultValues?.enquiryDate || null,
-      joiningDate: defaultValues?.joiningDate || null,
-      personalInfo: defaultValues?.personalInfo || "",
-      roomId: effectiveInitialRoomId,
-      status: effectiveStatus,
-      photoUrl: defaultValues?.photoUrl || null,
-      idProofUrl: defaultValues?.idProofUrl || null,
-      guardianName: defaultValues?.guardianName || "",
-      guardianContact: defaultValues?.guardianContact || "",
-    });
-
     setUiSelectedFloor(effectiveFloor);
 
-  }, [defaultValues, form, availableRooms, isEditing, initialRoomId, initialFloorNumber]);
+  }, [defaultValues, form, availableRooms, isEditing, initialRoomId, initialFloorNumber, getInitialFormState]);
 
 
   const floorOptions = React.useMemo(() => {
@@ -142,7 +154,7 @@ export function ResidentForm({
 
   const handleFloorSelect = (selectedFloorValue: string) => {
     setUiSelectedFloor(selectedFloorValue);
-    form.setValue('roomId', null);
+    form.setValue('roomId', null); // Reset room when floor changes
     form.trigger('roomId');
   };
 
@@ -183,18 +195,20 @@ export function ResidentForm({
   const handleFormSubmit = async (values: ResidentFormValues) => {
     const processedValues: ResidentFormValues = {
       ...values,
-      enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
-      joiningDate: values.joiningDate === "" ? null : values.joiningDate,
+      enquiryDate: values.enquiryDate ? format(parseISO(values.enquiryDate), 'yyyy-MM-dd') : null,
+      joiningDate: values.joiningDate ? format(parseISO(values.joiningDate), 'yyyy-MM-dd') : null,
       photoUrl: values.photoUrl || null,
       idProofUrl: values.idProofUrl || null,
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
+      roomId: values.roomId === UNASSIGNED_ROOM_SENTINEL ? null : values.roomId,
     };
     await onSubmit(processedValues);
   };
 
   const photoPreview = form.watch("photoUrl");
   const idProofPreview = form.watch("idProofUrl");
+  const currentStatus = form.watch("status");
 
   return (
     <Form {...form}>
@@ -250,7 +264,7 @@ export function ResidentForm({
                 <FormItem>
                   <FormLabel>Additional Personal Information (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="e.g., Emergency contact, allergies, etc." {...field} />
+                    <Textarea placeholder="e.g., Emergency contact, allergies, etc." {...field} value={field.value ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -376,8 +390,8 @@ export function ResidentForm({
                               !field.value && "text-muted-foreground"
                             )}
                           >
-                            {field.value ? (
-                              format(new Date(field.value), "PPP")
+                            {field.value && isValid(parseISO(field.value)) ? (
+                              format(parseISO(field.value), "PPP")
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -388,8 +402,8 @@ export function ResidentForm({
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date ? date.toISOString().split('T')[0] : null)}
+                          selected={field.value ? parseISO(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : null)}
                           initialFocus
                         />
                       </PopoverContent>
@@ -414,8 +428,8 @@ export function ResidentForm({
                               !field.value && "text-muted-foreground"
                             )}
                           >
-                            {field.value ? (
-                              format(new Date(field.value), "PPP")
+                            {field.value && isValid(parseISO(field.value)) ? (
+                              format(parseISO(field.value), "PPP")
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -426,8 +440,8 @@ export function ResidentForm({
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date ? date.toISOString().split('T')[0] : null)}
+                          selected={field.value ? parseISO(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : null)}
                           initialFocus
                         />
                       </PopoverContent>
@@ -446,13 +460,13 @@ export function ResidentForm({
                   <FormLabel>Status</FormLabel>
                   <Select
                     onValueChange={(value) => {
-                      field.onChange(value);
+                      field.onChange(value as ResidentStatus);
                       if (value === 'former') {
                         form.setValue('roomId', null);
                         setUiSelectedFloor(SELECT_FLOOR_SENTINEL);
                       }
                     }}
-                    value={field.value}>
+                    value={field.value || (isEditing ? "active" : "upcoming")}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select status" />
@@ -460,7 +474,8 @@ export function ResidentForm({
                     </FormControl>
                     <SelectContent>
                       {residentStatuses.map((status) => (
-                        <SelectItem key={status.value} value={status.value} disabled={isEditing && defaultValues?.status === 'former' && status.value !== 'former' && status.value !== 'upcoming'}>
+                        <SelectItem key={status.value} value={status.value} 
+                                    disabled={isEditing && currentStatus === 'former' && status.value !== 'former' && status.value !== 'upcoming'}>
                           {status.label}
                         </SelectItem>
                       ))}
@@ -516,8 +531,10 @@ export function ResidentForm({
                        <SelectItem value={UNASSIGNED_ROOM_SENTINEL}>Unassigned</SelectItem>
                       {roomsOnSelectedFloor
                         .map((room) => (
-                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== (initialRoomId || defaultValues?.roomId) }>
-                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== (initialRoomId || defaultValues?.roomId) ? " - Full" : ""}
+                          <SelectItem key={room.id} value={room.id} 
+                                      disabled={room.currentOccupancy >= room.capacity && room.id !== (defaultValues?.roomId || initialRoomId) }>
+                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) 
+                            {room.currentOccupancy >= room.capacity && room.id !== (defaultValues?.roomId || initialRoomId) ? " - Full" : ""}
                           </SelectItem>
                       ))}
                     </SelectContent>

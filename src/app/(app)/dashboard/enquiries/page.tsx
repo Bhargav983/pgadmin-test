@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getEnquiryColumns } from "./enquiry-columns";
@@ -43,6 +44,7 @@ const setStoredData = <T,>(key: string, data: T[]): void => {
 };
 
 export default function EnquiriesPage() {
+  const router = useRouter(); // Initialize useRouter
   const [allEnquiries, setAllEnquiries] = useState<Enquiry[]>([]);
   const [filteredEnquiries, setFilteredEnquiries] = useState<Enquiry[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -116,6 +118,9 @@ export default function EnquiriesPage() {
     const enquiryIndex = currentEnquiries.findIndex(e => e.id === enquiryId);
     if (enquiryIndex > -1) {
       currentEnquiries[enquiryIndex].status = newStatus;
+      if (newStatus === 'Converted' || newStatus === 'Closed') {
+        currentEnquiries[enquiryIndex].nextFollowUpDate = null; // Clear follow-up if converted or closed
+      }
       setStoredData(ENQUIRIES_STORAGE_KEY, currentEnquiries);
       fetchEnquiriesData();
       toast({ title: "Status Updated", description: `Enquiry status changed to ${newStatus}.` });
@@ -137,7 +142,32 @@ export default function EnquiriesPage() {
     setEnquiryToDelete(null);
   };
 
-  const columns = getEnquiryColumns(handleOpenForm, handleUpdateStatus, handleDeleteConfirmation);
+  const handleConvertToResident = (enquiry: Enquiry) => {
+    // 1. Update enquiry status to 'Converted'
+    let currentEnquiries = getStoredData<Enquiry>(ENQUIRIES_STORAGE_KEY);
+    const enquiryIndex = currentEnquiries.findIndex(e => e.id === enquiry.id);
+    if (enquiryIndex > -1) {
+      currentEnquiries[enquiryIndex].status = 'Converted';
+      currentEnquiries[enquiryIndex].nextFollowUpDate = null;
+      setStoredData(ENQUIRIES_STORAGE_KEY, currentEnquiries);
+      fetchEnquiriesData(); // Refresh local state
+    }
+
+    // 2. Prepare query parameters for Add Resident page
+    const queryParams = new URLSearchParams();
+    queryParams.append('name', enquiry.name);
+    queryParams.append('contact', enquiry.contact);
+    if (enquiry.email) queryParams.append('email', enquiry.email);
+    if (enquiry.enquiryDate) queryParams.append('enquiryDate', enquiry.enquiryDate);
+    queryParams.append('convertedFromEnquiryId', enquiry.id); // To link back
+
+    // 3. Navigate to Add Resident page
+    router.push(`/dashboard/residents/add?${queryParams.toString()}`);
+    toast({ title: "Enquiry Conversion Started", description: `Redirecting to add ${enquiry.name} as a new resident. Their status is now 'Converted'.` });
+  };
+
+
+  const columns = getEnquiryColumns(handleOpenForm, handleUpdateStatus, handleDeleteConfirmation, handleConvertToResident);
 
   const statusCounts = useMemo(() => {
     const counts: Record<EnquiryStatus | "all", number> = { all: allEnquiries.length, New: 0, 'Follow-up': 0, Converted: 0, Closed: 0 };
@@ -148,7 +178,7 @@ export default function EnquiriesPage() {
   }, [allEnquiries]);
 
 
-  if (isLoading && !filteredEnquiries.length) { // Show loader only if no data yet
+  if (isLoading && !filteredEnquiries.length) { 
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>

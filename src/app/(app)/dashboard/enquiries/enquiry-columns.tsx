@@ -17,14 +17,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal
 } from "@/components/ui/dropdown-menu";
-import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Send, Clock } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Send, Clock, UserPlus } from "lucide-react"; // Added UserPlus
 import { format, isValid } from "date-fns";
 import { enquiryStatuses } from "@/lib/types";
 
 const getStatusBadgeStyle = (status: EnquiryStatus): React.CSSProperties => {
     switch (status) {
-        case 'New': return { backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))' }; // Blue-ish
-        case 'Follow-up': return { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }; // Purple-ish
+        case 'New': return { backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))' };
+        case 'Follow-up': return { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
         case 'Converted': return { backgroundColor: 'hsl(var(--chart-2))', color: 'hsl(var(--primary-foreground))' }; // Green-ish
         case 'Closed': return { borderColor: 'hsl(var(--muted-foreground))', color: 'hsl(var(--muted-foreground))' };
         default: return {};
@@ -44,7 +44,8 @@ const getStatusBadgeVariant = (status: EnquiryStatus): "default" | "secondary" |
 export const getEnquiryColumns = (
   onEdit: (enquiry: Enquiry) => void,
   onUpdateStatus: (enquiryId: string, newStatus: EnquiryStatus) => void,
-  onDelete: (enquiryId: string) => void
+  onDelete: (enquiryId: string) => void,
+  onConvertToResident: (enquiry: Enquiry) => void // New handler
 ): ColumnDef<Enquiry>[] => [
   {
     accessorKey: "name",
@@ -121,6 +122,11 @@ export const getEnquiryColumns = (
             <DropdownMenuItem onClick={() => onEdit(enquiry)}>
               <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </DropdownMenuItem>
+            {enquiry.status !== 'Converted' && enquiry.status !== 'Closed' && (
+                 <DropdownMenuItem onClick={() => onConvertToResident(enquiry)} className="text-green-600 focus:bg-green-100 focus:text-green-700">
+                    <UserPlus className="mr-2 h-4 w-4" /> Convert to Resident
+                </DropdownMenuItem>
+            )}
             <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                     <Send className="mr-2 h-4 w-4" /> Update Status
@@ -131,7 +137,7 @@ export const getEnquiryColumns = (
                             <DropdownMenuItem 
                                 key={status} 
                                 onClick={() => onUpdateStatus(enquiry.id, status)}
-                                disabled={enquiry.status === status}
+                                disabled={enquiry.status === status || (status === 'Converted' && enquiry.status !== 'Follow-up' && enquiry.status !== 'New')} // Disable direct conversion if not new/follow-up
                             >
                                 {enquiry.status === status ? <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> : <Clock className="mr-2 h-4 w-4"/> }
                                 Mark as {status}

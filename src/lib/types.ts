@@ -14,7 +14,8 @@ export type ActivityType =
   | 'ROOM_TRANSFERRED'
   | 'VACATED'
   | 'ACTIVATED'
-  | 'REACTIVATED';
+  | 'REACTIVATED'
+  | 'ENQUIRY_CONVERTED'; // Added for enquiry conversion log
 
 export interface ActivityLogEntry {
   id: string;
@@ -27,6 +28,7 @@ export interface ActivityLogEntry {
     noClaimsConfirmed?: boolean;
     vacatedFromRoomId?: string | null;
     vacatedFromRoomNumber?: string;
+    convertedFromEnquiryId?: string; // To link back to the enquiry
   };
 }
 
