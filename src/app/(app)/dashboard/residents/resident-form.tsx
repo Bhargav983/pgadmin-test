@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -117,14 +118,13 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assign Room</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value || ""} value={field.value || ""}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value || undefined} value={field.value || undefined}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a room" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Select a room</SelectItem>
                       {availableRooms.map((room) => (
                         <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
                           {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
