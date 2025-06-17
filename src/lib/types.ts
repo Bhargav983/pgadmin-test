@@ -94,6 +94,21 @@ export interface Complaint {
   dateResolved?: string | null; // ISO Date string
 }
 
+// For General Info Page
+export interface Holiday {
+  id: string; // Or number if preferred for S.No.
+  date: string; // e.g., "Jan 01" or "2024-01-01"
+  reason: string;
+}
+
+export interface ImportantContact {
+  id: string;
+  service: string;
+  name?: string;
+  contactNumber: string;
+}
+
+
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
@@ -118,4 +133,3 @@ export interface ReceiptData {
   roomNumber: string;
   pgName?: string; // Optional, can be defaulted
 }
-
