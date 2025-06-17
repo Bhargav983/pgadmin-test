@@ -139,7 +139,19 @@ export default function ResidentsPage() {
     fetchData();
     const handleStorageChange = () => fetchData();
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    const handleDataChangedEvent = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail?.storeKey === 'pgResidents' || customEvent.detail?.storeKey === 'pgRooms') {
+            fetchData();
+        }
+    };
+    window.addEventListener('dataChanged', handleDataChangedEvent);
+
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('dataChanged', handleDataChangedEvent);
+    };
   }, [fetchData]);
 
 
@@ -177,33 +189,96 @@ export default function ResidentsPage() {
       toast({ title: "Error", description: "No resident or room selected for payment.", variant: "destructive" });
       return;
     }
-    const localRooms = getStoredData<Room>('pgRooms');
-    const roomForPayment = localRooms.find(r => r.id === selectedResidentForPayment.roomId);
-    if (!roomForPayment) {
-        toast({ title: "Error", description: "Could not find room details for payment.", variant: "destructive" });
+    
+    // Fetch latest version of allResidents to ensure checks are against current data
+    const currentAllResidents = getStoredData<Resident>('pgResidents');
+    const residentData = currentAllResidents.find(r => r.id === selectedResidentForPayment.id);
+
+    if (!residentData || !residentData.roomId) {
+        toast({ title: "Error", description: "Could not find resident data or resident is not assigned to a room.", variant: "destructive" });
         return;
     }
+    
+    const localRooms = getStoredData<Room>('pgRooms');
+    const roomForPayment = localRooms.find(r => r.id === residentData.roomId);
+
+    if (!roomForPayment || roomForPayment.rent <= 0) {
+        toast({ title: "Error", description: "Resident's assigned room has no rent configured or rent is zero.", variant: "destructive" });
+        return;
+    }
+
+    const targetMonth = paymentInput.month;
+    const targetYear = paymentInput.year;
+    const roomRent = roomForPayment.rent;
+
+    const amountAlreadyPaidForTargetPeriod = (residentData.payments || [])
+      .filter(p => p.month === targetMonth && p.year === targetYear && p.roomId === roomForPayment.id)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    let actualPreviousBalance = 0;
+    // Calculate previous balance based on resident's actual payment history and room assignments
+    const residentJoiningYear = residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1;
+    const residentJoiningMonth = residentData.joiningDate ? new Date(residentData.joiningDate).getMonth() + 1 : 1;
+
+    for (let y = residentJoiningYear; y <= targetYear; y++) {
+      const monthStart = (y === residentJoiningYear) ? residentJoiningMonth : 1;
+      const monthEnd = (y < targetYear) ? 12 : targetMonth - 1;
+
+      for (let m = monthStart; m <= monthEnd; m++) {
+        // Find if resident was in a room during this past month
+        // This is a simplified check; a more robust system would track room history
+        const pastRoomId = residentData.roomId; // Assuming current room was the room for past periods for simplicity
+        const pastRoom = localRooms.find(r => r.id === pastRoomId);
+        if (!pastRoom || pastRoom.rent <= 0) continue;
+
+        const rentForPastMonth = pastRoom.rent;
+        const paymentsForPastMonth = (residentData.payments || []).filter(p => p.month === m && p.year === y && p.roomId === pastRoom.id);
+        const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
+        
+        if (amountPaidPastMonth < rentForPastMonth) {
+          actualPreviousBalance += (rentForPastMonth - amountPaidPastMonth);
+        }
+      }
+    }
+    
+    const isTargetPeriodFullyCoveredByExistingPayments = (amountAlreadyPaidForTargetPeriod >= roomRent);
+    const canProceedWithPayment = !isTargetPeriodFullyCoveredByExistingPayments || actualPreviousBalance > 0;
+
+    if (!canProceedWithPayment) {
+      toast({
+        title: "Payment Not Allowed",
+        description: `Payment for ${format(new Date(targetYear, targetMonth -1), 'MMMM yyyy')} is already settled for ${residentData.name}, and there are no previous dues.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const newPayment: Payment = {
       id: crypto.randomUUID(),
       receiptId: `RCPT-${crypto.randomUUID().substring(0,8).toUpperCase()}`,
-      roomId: selectedResidentForPayment.roomId,
+      roomId: residentData.roomId, 
        ...paymentInput,
     };
     
-    let updatedResidents = allResidents.map(res => 
+    const updatedResidentsWithPayment = currentAllResidents.map(res => 
       res.id === selectedResidentForPayment.id ? { ...res, payments: [...(res.payments || []), newPayment] } : res
     );
-    setStoredData('pgResidents', updatedResidents);
+    setStoredData('pgResidents', updatedResidentsWithPayment); // Save before logging
     
     const paymentDescription = `Payment of ₹${newPayment.amount.toLocaleString()} via ${newPayment.mode} for ${format(new Date(newPayment.year, newPayment.month - 1), 'MMMM yyyy')} recorded. Room: ${roomForPayment.roomNumber}.`;
     await addActivityLogEntry(selectedResidentForPayment.id, 'PAYMENT_RECORDED', paymentDescription, { paymentId: newPayment.id, amount: newPayment.amount, roomNumber: roomForPayment.roomNumber });
     
-    fetchData();
+    fetchData(); // This will re-read from localStorage and update allResidents state
+
     setIsPaymentFormOpen(false);
     setCurrentReceiptData({ payment: newPayment, residentName: selectedResidentForPayment.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
     setIsReceiptDialogOpen(true);
     toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded.`, variant: "default" });
     setSelectedResidentForPayment(null);
+
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dataChanged', { detail: { storeKey: 'pgResidents' } }));
+    }
   };
 
   const handleOpenTransferDialog = (resident: Resident) => {
@@ -225,14 +300,15 @@ export default function ResidentsPage() {
     }
 
     try {
-      const localRooms = getStoredData<Room>('pgRooms');
-      const fromRoomNumber = localRooms.find(r => r.id === residentToTransfer.roomId)?.roomNumber || 'Unknown';
-      const toRoomNumber = localRooms.find(r => r.id === targetRoomId)?.roomNumber || 'Unknown';
+      const localRoomsData = getStoredData<Room>('pgRooms');
+      const fromRoomNumber = localRoomsData.find(r => r.id === residentToTransfer.roomId)?.roomNumber || 'Unknown';
+      const toRoomNumber = localRoomsData.find(r => r.id === targetRoomId)?.roomNumber || 'Unknown';
 
-      const updatedResidents = allResidents.map(res => 
+      const currentAllResidents = getStoredData<Resident>('pgResidents');
+      const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToTransfer.id ? { ...res, roomId: targetRoomId } : res
       );
-      setStoredData('pgResidents', updatedResidents);
+      setStoredData('pgResidents', updatedResidents); // Save before logging
       await addActivityLogEntry(residentToTransfer.id, 'ROOM_TRANSFERRED', `Transferred from room ${fromRoomNumber} to room ${toRoomNumber}.`, { fromRoomId: residentToTransfer.roomId, toRoomId: targetRoomId, fromRoomNumber, toRoomNumber });
       fetchData();
       toast({ title: "Resident Transferred", description: `${residentToTransfer.name} has been transferred to room ${toRoomNumber}.`, variant: "default"});
@@ -248,13 +324,14 @@ export default function ResidentsPage() {
   const executeVacateResident = async () => {
     if (!residentToVacate) return;
     try {
-      const localRooms = getStoredData<Room>('pgRooms');
-      const vacatedFromRoomNumber = residentToVacate.roomId ? localRooms.find(r => r.id === residentToVacate.roomId)?.roomNumber : 'N/A';
+      const localRoomsData = getStoredData<Room>('pgRooms');
+      const vacatedFromRoomNumber = residentToVacate.roomId ? localRoomsData.find(r => r.id === residentToVacate.roomId)?.roomNumber : 'N/A';
       
-      const updatedResidents = allResidents.map(res => 
+      const currentAllResidents = getStoredData<Resident>('pgResidents');
+      const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToVacate.id ? { ...res, status: 'former' as ResidentStatus, roomId: null } : res
       );
-      setStoredData('pgResidents', updatedResidents);
+      setStoredData('pgResidents', updatedResidents); // Save before logging
       await addActivityLogEntry(residentToVacate.id, 'VACATED', `${residentToVacate.name} vacated from room ${vacatedFromRoomNumber}. Status changed to Former.`, { vacatedFromRoomId: residentToVacate.roomId, vacatedFromRoomNumber });
       fetchData();
       toast({ title: "Resident Vacated", description: `${residentToVacate.name} has been set to 'Former' and unassigned from room.`, variant: "default"});
@@ -275,13 +352,14 @@ export default function ResidentsPage() {
   const executeActivateResident = async () => {
     if (!residentToActivate) return;
     try {
-      const localRooms = getStoredData<Room>('pgRooms');
-      const roomNumber = residentToActivate.roomId ? localRooms.find(r => r.id === residentToActivate.roomId)?.roomNumber : 'N/A';
+      const localRoomsData = getStoredData<Room>('pgRooms');
+      const roomNumber = residentToActivate.roomId ? localRoomsData.find(r => r.id === residentToActivate.roomId)?.roomNumber : 'N/A';
 
-      const updatedResidents = allResidents.map(res => 
+      const currentAllResidents = getStoredData<Resident>('pgResidents');
+      const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToActivate.id ? { ...res, status: 'active' as ResidentStatus } : res
       );
-      setStoredData('pgResidents', updatedResidents);
+      setStoredData('pgResidents', updatedResidents); // Save before logging
       await addActivityLogEntry(residentToActivate.id, 'ACTIVATED', `${residentToActivate.name} activated. Current room: ${roomNumber}.`, { roomId: residentToActivate.roomId, roomNumber });
       fetchData();
       toast({ title: "Resident Activated", description: `${residentToActivate.name} is now active in room ${roomNumber}.`, variant: "default"});
@@ -297,10 +375,11 @@ export default function ResidentsPage() {
   const executeReactivateResident = async () => {
     if (!residentToReactivate) return;
     try {
-      const updatedResidents = allResidents.map(res => 
+      const currentAllResidents = getStoredData<Resident>('pgResidents');
+      const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToReactivate.id ? { ...res, status: 'upcoming' as ResidentStatus, roomId: null } : res 
       );
-      setStoredData('pgResidents', updatedResidents);
+      setStoredData('pgResidents', updatedResidents); // Save before logging
       await addActivityLogEntry(residentToReactivate.id, 'REACTIVATED', `${residentToReactivate.name} reactivated. Status changed to Upcoming and unassigned from any room.`);
       fetchData();
       toast({ title: "Resident Reactivated", description: `${residentToReactivate.name} is now 'Upcoming'. Assign a room and activate if needed.`, variant: "default"});

@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { ProcessedPaymentEntry } from "./page"; 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpDown, MoreHorizontal, CreditCard, Eye } from "lucide-react";
+import { ArrowUpDown, CreditCard, Eye } from "lucide-react";
 
 export const getPaymentManagementColumns = (
   onRecordPayment: (data: ProcessedPaymentEntry) => void,
@@ -66,12 +66,12 @@ export const getPaymentManagementColumns = (
     cell: ({ row }) => {
       const status = row.original.statusSelectedMonth;
       let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "outline";
-      if (status === "Paid") badgeVariant = "secondary"; // Greenish, use primary for now
+      if (status === "Paid") badgeVariant = "secondary"; 
       if (status === "Unpaid") badgeVariant = "destructive";
-      if (status === "Partially Paid") badgeVariant = "default"; // Bluish, use default
+      if (status === "Partially Paid") badgeVariant = "default"; 
 
       let badgeStyle: React.CSSProperties = {};
-      if (status === "Paid") badgeStyle = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }; // Match active resident "Paid"
+      if (status === "Paid") badgeStyle = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }; 
       if (status === "Unpaid" && row.original.currentMonthRent > 0) badgeStyle = { backgroundColor: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' };
       if (status === "Partially Paid") badgeStyle = { backgroundColor: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))' };
 
@@ -93,7 +93,9 @@ export const getPaymentManagementColumns = (
     id: "actions",
     cell: ({ row }) => {
       const data = row.original;
-      const canRecordPayment = data.room && (data.statusSelectedMonth === 'Unpaid' || data.statusSelectedMonth === 'Partially Paid') && data.currentMonthRent > 0;
+      // Disable if room doesn't exist, rent is zero, OR if the month is fully paid AND no previous balance
+      const canRecordPaymentForThisPeriod = data.room && data.currentMonthRent > 0 && 
+                                           (!data.isFullyPaidForSelectedPeriod || data.previousBalance > 0);
       return (
         <div className="flex space-x-2">
           <Button variant="outline" size="sm" asChild>
@@ -103,7 +105,7 @@ export const getPaymentManagementColumns = (
             variant="default" 
             size="sm" 
             onClick={() => onRecordPayment(data)} 
-            disabled={!canRecordPayment}
+            disabled={!canRecordPaymentForThisPeriod}
             className="bg-accent hover:bg-accent/80 text-accent-foreground"
           >
             <CreditCard className="h-4 w-4" />
@@ -113,4 +115,3 @@ export const getPaymentManagementColumns = (
     },
   },
 ];
-

@@ -49,6 +49,7 @@ export interface ProcessedPaymentEntry {
   paymentModeForMonth?: string;
   resident: Resident; // Full resident object for actions
   room?: Room; // Full room object
+  isFullyPaidForSelectedPeriod: boolean; // New flag
 }
 
 export default function PaymentManagementPage() {
@@ -70,7 +71,6 @@ export default function PaymentManagementPage() {
 
   const { toast } = useToast();
 
-  // Derived summary states
   const [totalRentForSelectedPeriod, setTotalRentForSelectedPeriod] = useState(0);
   const [totalPaidForSelectedPeriod, setTotalPaidForSelectedPeriod] = useState(0);
   const [totalPreviousBalanceSum, setTotalPreviousBalanceSum] = useState(0);
@@ -118,7 +118,9 @@ export default function PaymentManagementPage() {
       const amountPaidSelectedMonth = paymentsSelectedMonth.reduce((sum, p) => sum + p.amount, 0);
       
       let statusSelectedMonth: ProcessedPaymentEntry['statusSelectedMonth'] = 'Unpaid';
-      if (amountPaidSelectedMonth >= currentMonthRent && currentMonthRent > 0) {
+      const isFullyPaidForSelectedPeriod = amountPaidSelectedMonth >= currentMonthRent && currentMonthRent > 0;
+
+      if (isFullyPaidForSelectedPeriod) {
         statusSelectedMonth = 'Paid';
       } else if (amountPaidSelectedMonth > 0) {
         statusSelectedMonth = 'Partially Paid';
@@ -139,6 +141,7 @@ export default function PaymentManagementPage() {
         paymentModeForMonth: paymentsSelectedMonth.length > 0 ? paymentsSelectedMonth[paymentsSelectedMonth.length -1].mode : undefined,
         resident: resident,
         room: room,
+        isFullyPaidForSelectedPeriod: isFullyPaidForSelectedPeriod,
       };
     });
 
@@ -148,12 +151,12 @@ export default function PaymentManagementPage() {
 
   useEffect(() => {
     fetchDataAndProcess();
-    const handleStorageChange = () => fetchDataAndProcess(); // For cross-tab updates
+    const handleStorageChange = () => fetchDataAndProcess();
     window.addEventListener('storage', handleStorageChange);
     
-    const handleDataChangedEvent = (event: Event) => { // For same-tab updates
+    const handleDataChangedEvent = (event: Event) => {
         const customEvent = event as CustomEvent;
-        if (customEvent.detail?.storeKey === 'pgResidents') {
+        if (customEvent.detail?.storeKey === 'pgResidents' || customEvent.detail?.storeKey === 'pgRooms') {
             fetchDataAndProcess();
         }
     };
@@ -166,7 +169,6 @@ export default function PaymentManagementPage() {
   }, [fetchDataAndProcess]);
 
   useEffect(() => {
-    // Calculate summary totals whenever processedPayments changes
     const rentSum = processedPayments.reduce((acc, curr) => acc + curr.currentMonthRent, 0);
     const paidSum = processedPayments.reduce((acc, curr) => acc + curr.amountPaidSelectedMonth, 0);
     const prevBalSum = processedPayments.reduce((acc, curr) => acc + curr.previousBalance, 0);
@@ -178,6 +180,15 @@ export default function PaymentManagementPage() {
   }, [processedPayments]);
 
   const handleOpenPaymentForm = (data: ProcessedPaymentEntry) => {
+    const selectedPeriodFormattedUser = format(new Date(filterYear, filterMonth - 1), 'MMMM yyyy');
+    if (data.isFullyPaidForSelectedPeriod && data.previousBalance <= 0) {
+      toast({
+        title: "Payment Settled",
+        description: `Payment for ${data.name} for ${selectedPeriodFormattedUser} is already settled, and there are no previous dues. For adjustments or other periods, use the resident's detail page.`,
+        variant: "default", 
+      });
+      return;
+    }
     setSelectedResidentForPayment(data.resident);
     setPaymentFormDefaultMonth(filterMonth);
     setPaymentFormDefaultYear(filterYear);
@@ -189,16 +200,58 @@ export default function PaymentManagementPage() {
       toast({ title: "Error", description: "No resident or room selected for payment.", variant: "destructive" });
       return;
     }
-    const roomForPayment = rooms.find(r => r.id === selectedResidentForPayment.roomId);
-    if (!roomForPayment) {
-        toast({ title: "Error", description: "Could not find room details for payment.", variant: "destructive" });
+    
+    const residentData = allResidents.find(r => r.id === selectedResidentForPayment.id);
+    if (!residentData) {
+        toast({ title: "Error", description: "Could not find resident data.", variant: "destructive" });
         return;
+    }
+
+    const roomForPayment = rooms.find(r => r.id === residentData.roomId);
+    if (!roomForPayment || roomForPayment.rent <= 0) {
+        toast({ title: "Error", description: "Resident is not assigned to a valid room with rent or rent is zero.", variant: "destructive" });
+        return;
+    }
+
+    const targetMonth = paymentInput.month;
+    const targetYear = paymentInput.year;
+    const roomRent = roomForPayment.rent;
+
+    const amountAlreadyPaidForTargetPeriod = residentData.payments
+      .filter(p => p.month === targetMonth && p.year === targetYear && p.roomId === roomForPayment.id)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    let actualPreviousBalance = 0;
+    for (let y = (residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1) ; y <= targetYear; y++) {
+      const monthStart = (y === (residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1)) ? (residentData.joiningDate ? new Date(residentData.joiningDate).getMonth() + 1 : 1) : 1;
+      const monthEnd = (y < targetYear) ? 12 : targetMonth - 1;
+      for (let m = monthStart; m <= monthEnd; m++) {
+        if (y > targetYear || (y === targetYear && m >= targetMonth)) continue;
+        const rentForPastMonth = roomForPayment.rent;
+        const paymentsForPastMonth = residentData.payments.filter(p => p.month === m && p.year === y && p.roomId === roomForPayment.id);
+        const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
+        if (amountPaidPastMonth < rentForPastMonth) {
+          actualPreviousBalance += (rentForPastMonth - amountPaidPastMonth);
+        }
+      }
+    }
+    
+    const isTargetPeriodFullyCoveredByExistingPayments = (amountAlreadyPaidForTargetPeriod >= roomRent);
+    const canProceedWithPayment = !isTargetPeriodFullyCoveredByExistingPayments || actualPreviousBalance > 0;
+
+    if (!canProceedWithPayment) {
+      toast({
+        title: "Payment Not Allowed",
+        description: `Payment for ${format(new Date(targetYear, targetMonth -1), 'MMMM yyyy')} is already settled for ${residentData.name}, and there are no previous dues.`,
+        variant: "destructive",
+      });
+      return;
     }
 
     const newPayment: Payment = {
       id: crypto.randomUUID(),
       receiptId: `RCPT-${crypto.randomUUID().substring(0,8).toUpperCase()}`,
-      roomId: selectedResidentForPayment.roomId,
+      roomId: residentData.roomId,
        ...paymentInput,
     };
     
@@ -212,7 +265,7 @@ export default function PaymentManagementPage() {
     };
 
     const updatedResidentsList = allResidents.map(res => {
-      if (res.id === selectedResidentForPayment.id) {
+      if (res.id === residentData.id) {
         return { 
           ...res, 
           payments: [...(res.payments || []), newPayment],
@@ -222,26 +275,24 @@ export default function PaymentManagementPage() {
       return res;
     });
     
-    setAllResidents(updatedResidentsList); // Update local state
-    setStoredData('pgResidents', updatedResidentsList); // Update localStorage with final data
-
-    // Dispatch custom event to notify other components (like Reports page)
+    setStoredData('pgResidents', updatedResidentsList);
+    setAllResidents(updatedResidentsList); // Update local state immediately
+    
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dataChanged', { detail: { storeKey: 'pgResidents' } }));
     }
     
-    fetchDataAndProcess(); // Refresh current page's table (reads from updated localStorage)
+    fetchDataAndProcess(); 
     
     setIsPaymentFormOpen(false);
-    setCurrentReceiptData({ payment: newPayment, residentName: selectedResidentForPayment.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
+    setCurrentReceiptData({ payment: newPayment, residentName: residentData.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
     setIsReceiptDialogOpen(true);
-    toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded.`, variant: "default" });
+    toast({ title: "Payment Recorded", description: `Payment for ${residentData.name} recorded.`, variant: "default" });
     setSelectedResidentForPayment(null);
   };
 
 
   const columns = getPaymentManagementColumns(handleOpenPaymentForm);
-  
   const selectedPeriodFormatted = format(new Date(filterYear, filterMonth - 1), 'MMM yyyy');
 
   return (
