@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
-import { PDFDownloadLink } from '@react-pdf/renderer';
+import { PDFDownloadLink, Document, Page, Text } from '@react-pdf/renderer'; // Added Document, Page, Text for placeholder
 import OverduePaymentsDocument from '@/components/pdf-documents/OverduePaymentsDocument';
 import type { OverdueResidentForPdf } from '@/components/pdf-documents/OverduePaymentsDocument';
 
@@ -48,6 +48,15 @@ interface ReportSummaries {
 
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Minimal document for PDFDownloadLink's loading state
+const LoadingPdfDocument = (
+  <Document>
+    <Page size="A4">
+      <Text>Preparing PDF...</Text>
+    </Page>
+  </Document>
+);
 
 export default function BillingPage() {
   const [reportSummaries, setReportSummaries] = useState<ReportSummaries>({
@@ -245,9 +254,7 @@ export default function BillingPage() {
     }));
   }, [reportSummaries.overdueResidents]);
 
-  const pdfDocumentInstance = useMemo(() => {
-    // This document instance is only created when the data is truly ready for it.
-    // The PDFDownloadLink itself is conditionally rendered based on isClient and data length.
+  const actualPdfDocumentInstance = useMemo(() => {
     return (
         <OverduePaymentsDocument
             data={preparedOverdueDataForPdf}
@@ -409,13 +416,17 @@ export default function BillingPage() {
                 </div>
                 {isClient && preparedOverdueDataForPdf.length > 0 && (
                     <PDFDownloadLink
-                    document={pdfDocumentInstance}
+                    document={actualPdfDocumentInstance} // Use the fully prepared instance here
                     fileName={`Overdue_Payments_Report_${format(currentDisplayDate, 'yyyy-MM-dd')}.pdf`}
                     >
                     {({ blob, url, loading, error }) =>
                         loading ? (
                         <Button variant="outline" size="sm" disabled>
                             <FileDown className="mr-2 h-4 w-4 animate-pulse" /> Generating PDF...
+                        </Button>
+                        ) : error ? (
+                        <Button variant="outline" size="sm" disabled className="text-destructive border-destructive">
+                            <AlertTriangle className="mr-2 h-4 w-4" /> Error
                         </Button>
                         ) : (
                         <Button variant="outline" size="sm">
@@ -473,5 +484,7 @@ export default function BillingPage() {
     </div>
   );
 }
+
+    
 
     
