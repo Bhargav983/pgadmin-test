@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/theme-context";
-import { Cog, Sun, Moon, Laptop, Bell, Database, Mail, Save } from "lucide-react";
+import { Cog, Sun, Moon, Laptop, Bell, Database, Mail, Save, Building2, Home } from "lucide-react"; // Added Building2
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator"; // Added Separator
 
 const EMAIL_CONFIG_STORAGE_KEY = 'pgAdminEmailConfig';
 
@@ -73,11 +74,12 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="pgDetails"><Building2 className="mr-2 h-4 w-4" />PG Details</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="data">Data Management</TabsTrigger>
-          <TabsTrigger value="email">Email Configuration</TabsTrigger>
+          <TabsTrigger value="email">Email Config</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -106,6 +108,50 @@ export default function SettingsPage() {
                   </Button>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pgDetails">
+          <Card className="shadow-lg mt-4">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center"><Home className="mr-2 h-5 w-5 text-accent" />PG Information</CardTitle>
+              <CardDescription>Details about your Paying Guest accommodation.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div>
+                <h3 className="font-semibold text-foreground">PG Name:</h3>
+                <p className="text-muted-foreground">Your Awesome PG Deluxe</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Location:</h3>
+                <p className="text-muted-foreground">123 Sunshine Avenue, Happy Town, HT 456789, India</p>
+              </div>
+               <div>
+                <h3 className="font-semibold text-foreground">Contact Person:</h3>
+                <p className="text-muted-foreground">Mr. A. B. Choudhary (Manager)</p>
+              </div>
+               <div>
+                <h3 className="font-semibold text-foreground">Contact Phone:</h3>
+                <p className="text-muted-foreground">+91-9876543210</p>
+              </div>
+               <div>
+                <h3 className="font-semibold text-foreground">Contact Email:</h3>
+                <p className="text-muted-foreground">contact@yourawesomepg.com</p>
+              </div>
+              <Separator />
+              <h3 className="text-md font-semibold text-foreground mb-2">Bank Account Details (for rent payments)</h3>
+              <div className="space-y-1">
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">Account Name:</span> Your PG Enterprise Pvt. Ltd.</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">Account Number:</span> 1234005678901234</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">Bank Name:</span> National Bank of Commerce</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">Branch:</span> Happy Town Main Branch</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">IFSC Code:</span> NBCN0001234</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">Account Type:</span> Current Account</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground inline-block w-32">UPI ID:</span> yourpg@okhdfcbank</p>
+              </div>
+               <Separator />
+               <p className="text-xs text-muted-foreground pt-2">Note: This information is for display purposes. To update these details, please contact the system administrator. (This is static demo data).</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -255,3 +301,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
