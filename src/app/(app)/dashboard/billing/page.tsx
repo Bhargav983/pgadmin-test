@@ -4,12 +4,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown } from "lucide-react";
+import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown, IndianRupee } from "lucide-react";
 import type { Resident, Room, Payment, AttendanceRecord } from "@/lib/types"; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, startOfDay } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -45,7 +46,7 @@ interface ReportSummaries {
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default function BillingPage() {
+export default function ReportsOverviewPage() {
   const [reportSummaries, setReportSummaries] = useState<ReportSummaries>({
     upcomingPaymentsAmount: 0,
     overduePaymentsAmount: 0,
@@ -179,20 +180,20 @@ export default function BillingPage() {
     // --- Attendance Calculations ---
     let presentToday = 0, lateToday = 0, absentToday = 0, onLeaveToday = 0, pendingToday = 0;
     const attendanceForToday = allAttendanceRecords.filter(ar => ar.date === todayFormatted);
-
-    const residentsWithTodaysRecord = new Set(attendanceForToday.map(ar => ar.residentId));
+    const activeResidentIds = new Set(activeResidents.map(res => res.id));
 
     attendanceForToday.forEach(ar => {
-      if (!activeResidents.find(res => res.id === ar.residentId)) return; 
+      if (!activeResidentIds.has(ar.residentId)) return; 
       switch(ar.status) {
         case 'Present': presentToday++; break;
         case 'Late': lateToday++; break;
         case 'Absent': absentToday++; break;
         case 'On Leave': onLeaveToday++; break;
-        default: pendingToday++; 
+        // 'Pending' status is counted below for those with no record
       }
     });
-    pendingToday += activeResidents.filter(res => !residentsWithTodaysRecord.has(res.id)).length;
+    // Add residents who have no attendance record for today to 'Pending'
+    pendingToday = activeResidents.filter(res => !attendanceForToday.find(ar => ar.residentId === res.id)).length;
 
 
     // --- Occupancy Calculations ---
@@ -220,7 +221,7 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    setIsClient(true); // Component has mounted
+    setIsClient(true); 
     calculateReportSummaries();
 
     const handleDataChanged = (event: Event) => {
@@ -230,7 +231,7 @@ export default function BillingPage() {
       }
     };
     
-    const handleStorageChange = () => { // For cross-tab updates
+    const handleStorageChange = () => { 
         calculateReportSummaries();
     }
 
@@ -244,7 +245,7 @@ export default function BillingPage() {
   }, [calculateReportSummaries]);
 
 
-  if (isLoading) {
+  if (isLoading && !isClient) { // Show loader only on initial server render or if client is still loading
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -259,170 +260,228 @@ export default function BillingPage() {
         <p className="text-sm text-muted-foreground">As of: {format(currentDisplayDate, 'PPP p')}</p>
       </div>
 
-      {/* Financial Summaries Section */}
-      <section>
-        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Financial Summary</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Link href="/dashboard/billing/collected" className="block hover:shadow-lg transition-shadow rounded-lg">
-            <Card className="shadow-md h-full cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₹{reportSummaries.collectedThisMonthAmount.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/billing/upcoming" className="block hover:shadow-lg transition-shadow rounded-lg">
-            <Card className="shadow-md h-full cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
-                <Receipt className="h-4 w-4 text-blue-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₹{reportSummaries.upcomingPaymentsAmount.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">
-                  Expected from active residents this month
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/dashboard/billing/overdue" className="block hover:shadow-lg transition-shadow rounded-lg">
-            <Card className="shadow-md h-full cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">₹{reportSummaries.overduePaymentsAmount.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total outstanding from active residents (previous periods)
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
-      </section>
+      <Tabs defaultValue="financial" className="w-full">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
+          <TabsTrigger value="financial"><IndianRupee className="mr-2 h-4 w-4" />Financial</TabsTrigger>
+          <TabsTrigger value="attendance"><ClipboardCheck className="mr-2 h-4 w-4" />Attendance</TabsTrigger>
+          <TabsTrigger value="occupancy"><BedDouble className="mr-2 h-4 w-4" />Occupancy</TabsTrigger>
+        </TabsList>
 
-      {/* Attendance & Occupancy Summaries Section */}
-      <section>
-        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Attendance & Occupancy</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="shadow-md h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Attendance ({format(currentDisplayDate, 'dd MMM')})</CardTitle>
-              <ClipboardCheck className="h-4 w-4 text-accent" />
-            </CardHeader>
-            <CardContent className="text-sm space-y-1">
-              <div className="flex justify-between"><span>Present:</span> <span className="font-semibold">{reportSummaries.presentToday}</span></div>
-              <div className="flex justify-between"><span>Late:</span> <span className="font-semibold">{reportSummaries.lateToday}</span></div>
-              <div className="flex justify-between"><span>Absent:</span> <span className="font-semibold">{reportSummaries.absentToday}</span></div>
-              <div className="flex justify-between"><span>On Leave:</span> <span className="font-semibold">{reportSummaries.onLeaveToday}</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>Pending:</span> <span className="font-semibold">{reportSummaries.pendingToday}</span></div>
-            </CardContent>
-          </Card>
-           <Card className="shadow-md h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Current Occupancy</CardTitle>
-              <Users className="h-4 w-4 text-accent" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{reportSummaries.occupiedBeds} / {reportSummaries.totalCapacity}</div>
-              <p className="text-xs text-muted-foreground">Occupied Beds / Total Capacity</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-md h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Vacant Beds</CardTitle>
-              <BedDouble className="h-4 w-4 text-accent" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{reportSummaries.vacantBeds}</div>
-              <p className="text-xs text-muted-foreground">Available spots in all rooms</p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+        <TabsContent value="financial" className="mt-6">
+          <section className="space-y-6">
+            <h2 className="text-2xl font-headline font-semibold text-primary">Financial Summary</h2>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Link href="/dashboard/billing/collected" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">₹{reportSummaries.collectedThisMonthAmount.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+              <Link href="/dashboard/billing/upcoming" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
+                    <Receipt className="h-4 w-4 text-blue-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">₹{reportSummaries.upcomingPaymentsAmount.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Expected from active residents this month
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+              <Link href="/dashboard/billing/overdue" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-destructive">₹{reportSummaries.overduePaymentsAmount.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Total outstanding from active residents (previous periods)
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
+          </section>
+          
+          <section className="mt-8">
+            <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Detailed Financial Logs</h2>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
+                  <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.recentPayments.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Resident</TableHead>
+                          <TableHead>Room</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Mode</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportSummaries.recentPayments.map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell>{p.residentName}</TableCell>
+                            <TableCell>{p.roomNumber}</TableCell>
+                            <TableCell>₹{p.amount.toLocaleString()}</TableCell>
+                            <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
+                            <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
+                  )}
+                </CardContent>
+              </Card>
 
-      {/* Detailed Tables Section */}
-      <section>
-        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Detailed Logs</h2>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
-              <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {reportSummaries.recentPayments.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Resident</TableHead>
-                      <TableHead>Room</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Mode</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportSummaries.recentPayments.map(p => (
-                      <TableRow key={p.id}>
-                        <TableCell>{p.residentName}</TableCell>
-                        <TableCell>{p.roomNumber}</TableCell>
-                        <TableCell>₹{p.amount.toLocaleString()}</TableCell>
-                        <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
-                        <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg">
-            <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                <div>
+              <Card className="shadow-lg">
+                <CardHeader>
                     <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
                     <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.overdueResidents.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Resident</TableHead>
+                          <TableHead>Room</TableHead>
+                          <TableHead>Overdue Amt.</TableHead>
+                          <TableHead>Last Fully Paid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportSummaries.overdueResidents.map(r => (
+                          <TableRow key={r.id}>
+                            <TableCell>{r.name}</TableCell>
+                            <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
+                            <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
+                            <TableCell>{r.lastPaymentMonth}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="attendance" className="mt-6">
+          <section className="space-y-6">
+            <h2 className="text-2xl font-headline font-semibold text-primary">Attendance Overview</h2>
+            <Link href="/dashboard/attendance" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Today's Attendance ({format(currentDisplayDate, 'dd MMM')})</CardTitle>
+                    <ClipboardCheck className="h-4 w-4 text-accent" />
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 text-sm">
+                    <div className="p-3 rounded-md bg-secondary">
+                        <p className="text-muted-foreground">Present</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.presentToday}</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-secondary">
+                        <p className="text-muted-foreground">Late</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.lateToday}</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-secondary">
+                        <p className="text-muted-foreground">Absent</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.absentToday}</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-secondary">
+                        <p className="text-muted-foreground">On Leave</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.onLeaveToday}</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-muted">
+                        <p className="text-muted-foreground">Pending</p>
+                        <p className="font-bold text-lg">{isLoading && isClient ? "-" : reportSummaries.pendingToday}</p>
+                    </div>
+                </CardContent>
+                 <CardContent className="pt-2">
+                    <Button variant="link" className="p-0 h-auto text-xs">View Detailed Attendance Log &rarr;</Button>
+                 </CardContent>
+                </Card>
+            </Link>
+             {isLoading && isClient && (
+                <div className="flex justify-center items-center h-32">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-solid border-primary border-t-transparent"></div>
                 </div>
-            </CardHeader>
-            <CardContent>
-              {reportSummaries.overdueResidents.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Resident</TableHead>
-                      <TableHead>Room</TableHead>
-                      <TableHead>Overdue Amt.</TableHead>
-                      <TableHead>Last Fully Paid</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportSummaries.overdueResidents.map(r => (
-                      <TableRow key={r.id}>
-                        <TableCell>{r.name}</TableCell>
-                        <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
-                        <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
-                        <TableCell>{r.lastPaymentMonth}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            )}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="occupancy" className="mt-6">
+          <section className="space-y-6">
+            <h2 className="text-2xl font-headline font-semibold text-primary">Occupancy Overview</h2>
+             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Link href="/dashboard/rooms" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Current Occupancy</CardTitle>
+                    <Users className="h-4 w-4 text-accent" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{isLoading && isClient ? "-/-" : `${reportSummaries.occupiedBeds} / ${reportSummaries.totalCapacity}`}</div>
+                    <p className="text-xs text-muted-foreground">Occupied Beds / Total Capacity</p>
+                    </CardContent>
+                </Card>
+                </Link>
+                <Link href="/dashboard/rooms" className="block hover:shadow-lg transition-shadow rounded-lg">
+                <Card className="shadow-md h-full cursor-pointer">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Vacant Beds</CardTitle>
+                    <BedDouble className="h-4 w-4 text-accent" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{isLoading && isClient ? "-" : reportSummaries.vacantBeds}</div>
+                    <p className="text-xs text-muted-foreground">Available spots in all rooms</p>
+                    </CardContent>
+                </Card>
+                </Link>
+                 <Card className="shadow-md h-full">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Active Residents</CardTitle>
+                    <Users className="h-4 w-4 text-accent" />
+                    </CardHeader>
+                    <CardContent>
+                    <div className="text-2xl font-bold">{isLoading && isClient ? "-" : reportSummaries.totalActiveResidents}</div>
+                    <p className="text-xs text-muted-foreground">Currently residing individuals</p>
+                    </CardContent>
+                </Card>
+            </div>
+             {isLoading && isClient && (
+                <div className="flex justify-center items-center h-32">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-solid border-primary border-t-transparent"></div>
+                </div>
+            )}
+          </section>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
