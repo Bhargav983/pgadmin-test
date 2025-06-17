@@ -19,7 +19,7 @@ export const ResidentSchema = z.object({
     message: "Invalid joining date.",
   }),
   personalInfo: z.string().optional(),
-  roomId: z.string().nullable(), 
+  roomId: z.string().nullable(),
   status: ResidentStatusSchema,
   photoUrl: z.string().url({ message: "Invalid photo URL." }).nullable().optional(),
   idProofUrl: z.string().url({ message: "Invalid ID proof URL." }).nullable().optional(),
@@ -30,7 +30,7 @@ export const ResidentSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Active residents must be assigned to a room.",
-      path: ["roomId"], 
+      path: ["roomId"],
     });
   }
   if (data.joiningDate && data.enquiryDate && new Date(data.joiningDate) < new Date(data.enquiryDate)) {
@@ -41,8 +41,6 @@ export const ResidentSchema = z.object({
     });
   }
   if (data.guardianContact && !/^\d{10}$/.test(data.guardianContact) && data.guardianContact.trim() !== "") {
-    // Basic 10-digit phone number validation for guardian contact, allows empty string
-    // For more robust validation, consider a library or more complex regex
     ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Guardian contact must be a valid 10-digit phone number or empty.",
@@ -65,4 +63,30 @@ export const PaymentSchema = z.object({
   date: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid payment date." }), 
   mode: PaymentModeSchema,
   notes: z.string().optional(),
+});
+
+export const AttendanceStatusSchema = z.enum(['Pending', 'Present', 'Late', 'Absent', 'On Leave']);
+
+export const AttendanceFormValidationSchema = z.object({
+  checkInTime: z.string().nullable().optional()
+    .refine(val => !val || /^([01]\d|2[0-3]):([0-5]\d)$/.test(val), { message: "Invalid check-in time format (HH:MM)." }),
+  checkOutTime: z.string().nullable().optional()
+    .refine(val => !val || /^([01]\d|2[0-3]):([0-5]\d)$/.test(val), { message: "Invalid check-out time format (HH:MM)." }),
+  status: AttendanceStatusSchema,
+  notes: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.checkInTime && data.checkOutTime && data.checkOutTime < data.checkInTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Check-out time cannot be earlier than check-in time.",
+      path: ["checkOutTime"],
+    });
+  }
+  if ((data.status === 'Present' || data.status === 'Late') && !data.checkInTime) {
+     ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Check-in time is required for 'Present' or 'Late' status.",
+      path: ["checkInTime"],
+    });
+  }
 });

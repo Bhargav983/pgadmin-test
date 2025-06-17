@@ -1,4 +1,5 @@
 
+
 export type PaymentMode = 'Cash' | 'UPI' | 'Bank Transfer';
 export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
 export type ResidentStatus = 'active' | 'upcoming' | 'former';
@@ -58,9 +59,27 @@ export interface Resident {
   guardianContact?: string | null;
 }
 
+export type AttendanceStatus = 'Pending' | 'Present' | 'Late' | 'Absent' | 'On Leave';
+
+export interface AttendanceRecord {
+  id: string; // Unique ID for the attendance entry: e.g., residentId-YYYY-MM-DD
+  residentId: string;
+  date: string; // YYYY-MM-DD format
+  checkInTime: string | null; // Store as HH:mm or full ISO if needed
+  checkOutTime: string | null; // Store as HH:mm or full ISO
+  status: AttendanceStatus;
+  notes: string | null;
+  // Denormalized data for easier display, captured at the time of record creation/update
+  residentNameAtTime: string; 
+  roomNumberAtTime: string | null;
+}
+
+
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
+export type AttendanceFormValues = Omit<AttendanceRecord, 'id' | 'residentId' | 'date' | 'residentNameAtTime' | 'roomNumberAtTime'>;
+
 
 // For receipt display
 export interface ReceiptData {
@@ -69,3 +88,4 @@ export interface ReceiptData {
   roomNumber: string;
   pgName?: string; // Optional, can be defaulted
 }
+

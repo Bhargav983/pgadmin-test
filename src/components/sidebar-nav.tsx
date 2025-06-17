@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard } from "lucide-react";
+import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard, ClipboardCheck } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/rooms", label: "Rooms", icon: BedDouble },
   { href: "/dashboard/residents", label: "Residents", icon: Users },
   { href: "/dashboard/payment-management", label: "Payment Management", icon: CreditCard },
+  { href: "/dashboard/attendance", label: "Attendance Tracking", icon: ClipboardCheck },
   { href: "/dashboard/billing", label: "Reports", icon: IndianRupee },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];
@@ -47,3 +48,4 @@ export function SidebarNav() {
     </ScrollArea>
   );
 }
+
