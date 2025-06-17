@@ -64,6 +64,7 @@ export default function BillingPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
+  const [isClient, setIsClient] = useState(false);
 
 
   const calculateReportSummaries = useCallback(() => {
@@ -219,10 +220,27 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
+    setIsClient(true); // Component has mounted
     calculateReportSummaries();
-    const handleStorageChange = () => calculateReportSummaries();
+
+    const handleDataChanged = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.storeKey === 'pgResidents' || customEvent.detail?.storeKey === 'pgRooms' || customEvent.detail?.storeKey === 'pgAttendanceRecords') {
+        calculateReportSummaries();
+      }
+    };
+    
+    const handleStorageChange = () => { // For cross-tab updates
+        calculateReportSummaries();
+    }
+
+    window.addEventListener('dataChanged', handleDataChanged);
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('dataChanged', handleDataChanged);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [calculateReportSummaries]);
 
 
@@ -370,7 +388,7 @@ export default function BillingPage() {
           </Card>
 
           <Card className="shadow-lg">
-            <CardHeader className="flex justify-between items-center">
+            <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
                     <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
                     <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
@@ -408,4 +426,3 @@ export default function BillingPage() {
     </div>
   );
 }
-

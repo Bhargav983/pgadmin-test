@@ -75,35 +75,6 @@ export default function PaymentManagementPage() {
   const [totalPaidForSelectedPeriod, setTotalPaidForSelectedPeriod] = useState(0);
   const [totalPreviousBalanceSum, setTotalPreviousBalanceSum] = useState(0);
   const [overallTotalDue, setOverallTotalDue] = useState(0);
-
-
-  const addActivityLogEntry = (
-    residentId: string,
-    type: ActivityType,
-    description: string,
-    details?: Record<string, any>
-  ): Promise<Resident[]> => {
-    return new Promise((resolve) => {
-      setAllResidents(prevAllResidents => {
-        const updatedResidents = prevAllResidents.map(res => {
-          if (res.id === residentId) {
-            const newLogEntry: ActivityLogEntry = {
-              id: crypto.randomUUID(),
-              timestamp: new Date().toISOString(),
-              type,
-              description,
-              details,
-            };
-            return { ...res, activityLog: [...(res.activityLog || []), newLogEntry] };
-          }
-          return res;
-        });
-        setStoredData('pgResidents', updatedResidents);
-        resolve(updatedResidents);
-        return updatedResidents; 
-      });
-    });
-  };
   
   const fetchDataAndProcess = useCallback(() => {
     setIsLoading(true);
@@ -177,9 +148,21 @@ export default function PaymentManagementPage() {
 
   useEffect(() => {
     fetchDataAndProcess();
-    const handleStorageChange = () => fetchDataAndProcess();
+    const handleStorageChange = () => fetchDataAndProcess(); // For cross-tab updates
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    
+    const handleDataChangedEvent = (event: Event) => { // For same-tab updates
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail?.storeKey === 'pgResidents') {
+            fetchDataAndProcess();
+        }
+    };
+    window.addEventListener('dataChanged', handleDataChangedEvent);
+
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('dataChanged', handleDataChangedEvent);
+    };
   }, [fetchDataAndProcess]);
 
   useEffect(() => {
@@ -211,6 +194,7 @@ export default function PaymentManagementPage() {
         toast({ title: "Error", description: "Could not find room details for payment.", variant: "destructive" });
         return;
     }
+
     const newPayment: Payment = {
       id: crypto.randomUUID(),
       receiptId: `RCPT-${crypto.randomUUID().substring(0,8).toUpperCase()}`,
@@ -218,16 +202,36 @@ export default function PaymentManagementPage() {
        ...paymentInput,
     };
     
-    const updatedAllResidents = allResidents.map(res => 
-      res.id === selectedResidentForPayment.id ? { ...res, payments: [...(res.payments || []), newPayment] } : res
-    );
-    setStoredData('pgResidents', updatedAllResidents); 
-    setAllResidents(updatedAllResidents); 
-    
     const paymentDescription = `Payment of ₹${newPayment.amount.toLocaleString()} via ${newPayment.mode} for ${format(new Date(newPayment.year, newPayment.month - 1), 'MMMM yyyy')} recorded. Room: ${roomForPayment.roomNumber}.`;
-    await addActivityLogEntry(selectedResidentForPayment.id, 'PAYMENT_RECORDED', paymentDescription, { paymentId: newPayment.id, amount: newPayment.amount, roomNumber: roomForPayment.roomNumber });
+    const newLogEntry: ActivityLogEntry = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      type: 'PAYMENT_RECORDED',
+      description: paymentDescription,
+      details: { paymentId: newPayment.id, amount: newPayment.amount, roomNumber: roomForPayment.roomNumber },
+    };
+
+    const updatedResidentsList = allResidents.map(res => {
+      if (res.id === selectedResidentForPayment.id) {
+        return { 
+          ...res, 
+          payments: [...(res.payments || []), newPayment],
+          activityLog: [...(res.activityLog || []), newLogEntry]
+        };
+      }
+      return res;
+    });
     
-    fetchDataAndProcess(); 
+    setAllResidents(updatedResidentsList); // Update local state
+    setStoredData('pgResidents', updatedResidentsList); // Update localStorage with final data
+
+    // Dispatch custom event to notify other components (like Reports page)
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dataChanged', { detail: { storeKey: 'pgResidents' } }));
+    }
+    
+    fetchDataAndProcess(); // Refresh current page's table (reads from updated localStorage)
+    
     setIsPaymentFormOpen(false);
     setCurrentReceiptData({ payment: newPayment, residentName: selectedResidentForPayment.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
     setIsReceiptDialogOpen(true);
@@ -318,5 +322,3 @@ export default function PaymentManagementPage() {
     </div>
   );
 }
-
-    
