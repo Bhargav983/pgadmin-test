@@ -66,7 +66,9 @@ export default function RoomsPage() {
 
     const roomsWithOccupancy = storedRooms.map(room => {
       const currentOccupancy = storedResidents.filter(resident => resident.roomId === room.id && (resident.status === 'active' || resident.status === 'upcoming')).length;
-      return { ...room, currentOccupancy };
+      // Ensure floorNumber is a valid number, default to 0 if not present or invalid
+      const validFloorNumber = typeof room.floorNumber === 'number' && !isNaN(room.floorNumber) ? room.floorNumber : 0;
+      return { ...room, floorNumber: validFloorNumber, currentOccupancy };
     });
     setRooms(roomsWithOccupancy);
   }, []);
