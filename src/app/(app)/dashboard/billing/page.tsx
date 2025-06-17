@@ -4,8 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BadgeIndianRupee, Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
-import Image from "next/image";
+import { Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { Resident, Room, Payment } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
@@ -182,7 +181,7 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <h1 className="text-3xl font-headline font-semibold">Billing &amp; Payments Overview</h1>
+        <h1 className="text-3xl font-headline font-semibold">Reports Overview</h1>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -299,22 +298,6 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="shadow-lg mt-6">
-        <CardHeader className="flex flex-row items-center space-x-2">
-          <BadgeIndianRupee className="h-6 w-6 text-primary" />
-          <CardTitle className="font-headline">Billing System Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mt-2 p-6 border rounded-lg bg-secondary/30 flex flex-col items-center text-center">
-            <Image src="https://placehold.co/300x200.png" alt="Billing illustration" width={300} height={200} className="rounded-md mb-4" data-ai-hint="invoice payment" />
-            <h3 className="text-xl font-semibold mb-2">Automated Invoicing &amp; Reminders Coming Soon!</h3>
-            <p className="text-muted-foreground max-w-md">
-              We are working hard to bring you a more comprehensive billing system including automated invoice generation and payment reminders. Stay tuned for updates!
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
