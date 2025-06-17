@@ -168,16 +168,6 @@ export default function DashboardPage() {
           </Card>
         </Link>
       </div>
-
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline">Recent Activity & Notifications</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Key updates and important notifications will appear here in future versions!</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
-
