@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getPaymentManagementColumns } from "./payment-management-columns";
@@ -11,6 +11,7 @@ import { ReceiptDialog } from "@/components/receipt-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
 import { IndianRupee } from 'lucide-react';
 
@@ -52,6 +53,8 @@ export interface ProcessedPaymentEntry {
   isFullyPaidForSelectedPeriod: boolean; // New flag
 }
 
+type PaymentStatusTab = "all" | "unpaid" | "partiallyPaid" | "paid";
+
 export default function PaymentManagementPage() {
   const [allResidents, setAllResidents] = useState<Resident[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -60,6 +63,7 @@ export default function PaymentManagementPage() {
 
   const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState<PaymentStatusTab>("all");
 
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<Resident | null>(null);
@@ -179,6 +183,27 @@ export default function PaymentManagementPage() {
     setOverallTotalDue(rentSum + prevBalSum);
   }, [processedPayments]);
 
+
+  const filteredPaymentsForTable = useMemo(() => {
+    if (activeTab === 'all') return processedPayments;
+    return processedPayments.filter(p => {
+      if (activeTab === 'unpaid') return p.statusSelectedMonth === 'Unpaid' && p.currentMonthRent > 0;
+      if (activeTab === 'partiallyPaid') return p.statusSelectedMonth === 'Partially Paid';
+      if (activeTab === 'paid') return p.statusSelectedMonth === 'Paid';
+      return true;
+    });
+  }, [processedPayments, activeTab]);
+
+  const paymentStatusCounts = useMemo(() => {
+    return {
+      all: processedPayments.length,
+      unpaid: processedPayments.filter(p => p.statusSelectedMonth === 'Unpaid' && p.currentMonthRent > 0).length,
+      partiallyPaid: processedPayments.filter(p => p.statusSelectedMonth === 'Partially Paid').length,
+      paid: processedPayments.filter(p => p.statusSelectedMonth === 'Paid').length,
+    };
+  }, [processedPayments]);
+
+
   const handleOpenPaymentForm = (data: ProcessedPaymentEntry) => {
     const selectedPeriodFormattedUser = format(new Date(filterYear, filterMonth - 1), 'MMMM yyyy');
     if (data.isFullyPaidForSelectedPeriod && data.previousBalance <= 0) {
@@ -229,7 +254,7 @@ export default function PaymentManagementPage() {
         if (y > targetYear || (y === targetYear && m >= targetMonth)) continue;
         const rentForPastMonth = roomForPayment.rent;
         const paymentsForPastMonth = residentData.payments.filter(p => p.month === m && p.year === y && p.roomId === roomForPayment.id);
-        const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
+        const amountPaidPastMonth = paymentsForPastMonth.reduce((acc, curr) => acc + curr.amount, 0);
         if (amountPaidPastMonth < rentForPastMonth) {
           actualPreviousBalance += (rentForPastMonth - amountPaidPastMonth);
         }
@@ -346,15 +371,50 @@ export default function PaymentManagementPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
-            </div>
-          ) : processedPayments.length > 0 ? (
-            <DataTable columns={columns} data={processedPayments} filterColumn="name" filterInputPlaceholder="Filter by resident name..."/>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">No active residents found or no data for the selected period.</p>
-          )}
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PaymentStatusTab)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
+              <TabsTrigger value="all">All ({paymentStatusCounts.all})</TabsTrigger>
+              <TabsTrigger value="unpaid">Unpaid ({paymentStatusCounts.unpaid})</TabsTrigger>
+              <TabsTrigger value="partiallyPaid">Partially Paid ({paymentStatusCounts.partiallyPaid})</TabsTrigger>
+              <TabsTrigger value="paid">Paid ({paymentStatusCounts.paid})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all">
+                {isLoading ? (
+                <div className="flex h-64 items-center justify-center"><div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div></div>
+                ) : filteredPaymentsForTable.length > 0 ? (
+                <DataTable columns={columns} data={filteredPaymentsForTable} filterColumn="name" filterInputPlaceholder="Filter by resident name..."/>
+                ) : (
+                <p className="text-muted-foreground text-center py-8">No active residents found or no data for the selected period/status.</p>
+                )}
+            </TabsContent>
+             <TabsContent value="unpaid">
+                {isLoading ? (
+                <div className="flex h-64 items-center justify-center"><div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div></div>
+                ) : filteredPaymentsForTable.length > 0 ? (
+                <DataTable columns={columns} data={filteredPaymentsForTable} filterColumn="name" filterInputPlaceholder="Filter by resident name..."/>
+                ) : (
+                <p className="text-muted-foreground text-center py-8">No unpaid records for the selected period/status.</p>
+                )}
+            </TabsContent>
+             <TabsContent value="partiallyPaid">
+                {isLoading ? (
+                <div className="flex h-64 items-center justify-center"><div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div></div>
+                ) : filteredPaymentsForTable.length > 0 ? (
+                <DataTable columns={columns} data={filteredPaymentsForTable} filterColumn="name" filterInputPlaceholder="Filter by resident name..."/>
+                ) : (
+                <p className="text-muted-foreground text-center py-8">No partially paid records for the selected period/status.</p>
+                )}
+            </TabsContent>
+             <TabsContent value="paid">
+                {isLoading ? (
+                <div className="flex h-64 items-center justify-center"><div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div></div>
+                ) : filteredPaymentsForTable.length > 0 ? (
+                <DataTable columns={columns} data={filteredPaymentsForTable} filterColumn="name" filterInputPlaceholder="Filter by resident name..."/>
+                ) : (
+                <p className="text-muted-foreground text-center py-8">No paid records for the selected period/status.</p>
+                )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -373,3 +433,4 @@ export default function PaymentManagementPage() {
     </div>
   );
 }
+
