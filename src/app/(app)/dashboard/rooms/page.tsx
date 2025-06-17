@@ -1,14 +1,14 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getRoomColumns } from "./room-columns";
 import { RoomForm } from "./room-form";
-import { RoomCard } from "@/components/room-card"; // New import
+import { RoomCard } from "@/components/room-card"; 
 import type { Room, RoomFormValues, Resident } from "@/lib/types";
-import { PlusCircle, List, LayoutGrid } from "lucide-react"; // Added List, LayoutGrid
+import { PlusCircle, List, LayoutGrid, Filter } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -20,7 +20,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // New import
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -44,6 +47,8 @@ export default function RoomsPage() {
   const [filteredRooms, setFilteredRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [selectedFloor, setSelectedFloor] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>(""); // For DataTable's search input
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | undefined>(undefined);
@@ -74,7 +79,9 @@ export default function RoomsPage() {
   }, [fetchRoomsAndOccupancy]);
 
   useEffect(() => {
-    let currentFilteredRooms = [...rooms]; // Create a new array reference
+    let currentFilteredRooms = [...rooms]; 
+    
+    // Apply tab filter
     if (activeTab === 'full') {
       currentFilteredRooms = rooms.filter(room => room.capacity > 0 && room.currentOccupancy === room.capacity);
     } else if (activeTab === 'available') {
@@ -82,15 +89,38 @@ export default function RoomsPage() {
     } else if (activeTab === 'vacant') {
       currentFilteredRooms = rooms.filter(room => room.currentOccupancy === 0);
     }
+
+    // Apply floor filter
+    if (selectedFloor !== 'all') {
+      currentFilteredRooms = currentFilteredRooms.filter(room => room.floorNumber === parseInt(selectedFloor));
+    }
+    
+    // Apply search term filter (for card view, DataTable handles its own)
+    if (viewMode === 'card' && searchTerm) {
+        currentFilteredRooms = currentFilteredRooms.filter(room =>
+            room.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (room.facilities && room.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    }
+
     setFilteredRooms(currentFilteredRooms.sort((a,b) => a.roomNumber.localeCompare(b.roomNumber)));
-  }, [rooms, activeTab]);
+  }, [rooms, activeTab, selectedFloor, searchTerm, viewMode]);
+
+  const floorNumbers = useMemo(() => {
+    const uniqueFloors = Array.from(new Set(rooms.map(room => room.floorNumber))).sort((a, b) => a - b);
+    return uniqueFloors;
+  }, [rooms]);
 
 
   const handleAddRoom = async (values: RoomFormValues) => {
     try {
       const newRoom: Room = { 
-        ...values, 
         id: crypto.randomUUID(),
+        roomNumber: values.roomNumber,
+        capacity: values.capacity,
+        rent: values.rent,
+        floorNumber: values.floorNumber,
+        facilities: values.facilities ? values.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
         currentOccupancy: 0, 
       };
       const updatedRooms = [...rooms, newRoom];
@@ -107,7 +137,15 @@ export default function RoomsPage() {
     if (!editingRoom) return;
     try {
       const updatedRooms = rooms.map((room) =>
-        room.id === editingRoom.id ? { ...room, ...values, currentOccupancy: room.currentOccupancy } : room
+        room.id === editingRoom.id ? { 
+            ...room, 
+            roomNumber: values.roomNumber,
+            capacity: values.capacity,
+            rent: values.rent,
+            floorNumber: values.floorNumber,
+            facilities: values.facilities ? values.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
+            // currentOccupancy is preserved
+        } : room
       );
       setStoredData('pgRooms', updatedRooms);
       fetchRoomsAndOccupancy(); 
@@ -157,14 +195,28 @@ export default function RoomsPage() {
   const columns = getRoomColumns(openEditForm, handleDeleteConfirmation);
 
   return (
-    <div className="container mx-auto py-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+    <div className="container mx-auto py-4 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-headline font-semibold">Manage Rooms</h1>
-        <div className="flex items-center gap-2">
-          <Button variant={viewMode === 'table' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('table')} aria-label="Table View">
+        <div className="flex flex-wrap items-center gap-2">
+           <Select value={selectedFloor} onValueChange={setSelectedFloor}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <Filter className="mr-2 h-4 w-4 opacity-50" />
+              <SelectValue placeholder="Filter by Floor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Floors</SelectItem>
+              {floorNumbers.map(floor => (
+                <SelectItem key={floor} value={floor.toString()}>
+                  {floor === 0 ? "Ground Floor" : `Floor ${floor}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('table')} aria-label="Table View">
             <List className="h-5 w-5" />
           </Button>
-          <Button variant={viewMode === 'card' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('card')} aria-label="Card View">
+          <Button variant={viewMode === 'card' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('card')} aria-label="Card View">
             <LayoutGrid className="h-5 w-5" />
           </Button>
           <Button onClick={() => { setEditingRoom(undefined); setIsFormOpen(true); }} className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -172,18 +224,28 @@ export default function RoomsPage() {
           </Button>
         </div>
       </div>
+      
+      {viewMode === 'card' && (
+         <Input
+            placeholder="Search by room no. or facility..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm mb-4"
+        />
+      )}
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-6">
+
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-          <TabsTrigger value="all">All ({rooms.length})</TabsTrigger>
-          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity).length})</TabsTrigger>
-          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity).length})</TabsTrigger>
-          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0).length})</TabsTrigger>
+          <TabsTrigger value="all">All ({rooms.filter(r => selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)).length})</TabsTrigger>
+          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
+          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
+          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0 && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
       {viewMode === 'table' ? (
-        filteredRooms.length > 0 || activeTab === 'all' ? (
+        filteredRooms.length > 0 || activeTab === 'all' && selectedFloor === 'all' ? (
           <DataTable columns={columns} data={filteredRooms} filterColumn="roomNumber" filterInputPlaceholder="Filter by room number..." />
         ) : (
           <div className="col-span-full text-center py-10 bg-card border rounded-md">

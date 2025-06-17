@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, Users, BedDouble, IndianRupee } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Users, BedDouble, IndianRupee, Layers, Sparkles } from "lucide-react";
 
 interface RoomCardProps {
   room: Room;
@@ -20,19 +20,17 @@ export function RoomCard({ room, onEdit, onDelete }: RoomCardProps) {
   let occupancyText = `${Math.round(occupancyRate)}% Full`;
   let badgeClassName = "bg-primary text-primary-foreground"; // Default for available
 
-  if (room.currentOccupancy === 0) {
+  if (room.currentOccupancy === 0 && room.capacity > 0) {
     occupancyBadgeVariant = "secondary"; 
     occupancyText = "Vacant";
     badgeClassName = "bg-green-500 text-white";
-  } else if (room.capacity > 0 && room.currentOccupancy === room.capacity) {
+  } else if (room.capacity > 0 && room.currentOccupancy >= room.capacity) {
     occupancyBadgeVariant = "destructive";
     occupancyText = "Full";
     badgeClassName = "bg-destructive text-destructive-foreground";
   } else if (room.currentOccupancy > 0) {
-    // Already set by default: occupancyBadgeVariant = "default"; badgeClassName is primary
     occupancyText = `${Math.round(occupancyRate)}% Full (${room.currentOccupancy}/${room.capacity})`;
   } else if (room.capacity === 0 && room.currentOccupancy === 0) {
-    // Edge case: 0 capacity room that is also vacant
     occupancyBadgeVariant = "outline";
     occupancyText = "N/A (0 Cap)";
     badgeClassName = "text-muted-foreground border-muted-foreground";
@@ -74,6 +72,9 @@ export function RoomCard({ room, onEdit, onDelete }: RoomCardProps) {
       </CardHeader>
       <CardContent className="space-y-1.5 text-sm pt-0 pb-4">
         <div className="flex items-center text-muted-foreground">
+          <Layers className="mr-2 h-4 w-4 text-primary" /> Floor: <span className="font-medium text-foreground ml-1">{room.floorNumber === 0 ? "Ground" : room.floorNumber}</span>
+        </div>
+        <div className="flex items-center text-muted-foreground">
           <BedDouble className="mr-2 h-4 w-4 text-primary" /> Capacity: <span className="font-medium text-foreground ml-1">{room.capacity} persons</span>
         </div>
         <div className="flex items-center text-muted-foreground">
@@ -82,10 +83,17 @@ export function RoomCard({ room, onEdit, onDelete }: RoomCardProps) {
         <div className="flex items-center text-muted-foreground">
           <IndianRupee className="mr-2 h-4 w-4 text-primary" /> Rent: <span className="font-medium text-foreground ml-1">₹{room.rent.toLocaleString()}</span>
         </div>
+        {room.facilities && room.facilities.length > 0 && (
+          <div className="flex items-start text-muted-foreground pt-1">
+            <Sparkles className="mr-2 h-4 w-4 text-primary shrink-0 mt-0.5" /> 
+            <div className="flex flex-wrap gap-1">
+                {room.facilities.map((facility, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">{facility}</Badge>
+                ))}
+            </div>
+          </div>
+        )}
       </CardContent>
-      {/* Footer can be used for quick actions or additional summary if needed in future */}
-      {/* <CardFooter className="pt-2 pb-4">
-      </CardFooter> */}
     </Card>
   );
 }

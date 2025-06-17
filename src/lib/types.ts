@@ -42,6 +42,8 @@ export interface Room {
   capacity: number;
   rent: number;
   currentOccupancy: number; // Represents active or upcoming residents in the room
+  floorNumber: number;
+  facilities?: string[];
 }
 
 export interface Resident {
@@ -109,7 +111,13 @@ export interface ImportantContact {
 }
 
 
-export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
+export type RoomFormValues = {
+  roomNumber: string;
+  capacity: number;
+  rent: number;
+  floorNumber: number;
+  facilities?: string; // Comma-separated string from form
+};
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
 export type AttendanceFormValues = Omit<AttendanceRecord, 'id' | 'residentId' | 'date' | 'residentNameAtTime' | 'roomNumberAtTime'>;

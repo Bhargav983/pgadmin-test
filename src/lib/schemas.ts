@@ -5,10 +5,14 @@ import { complaintCategories } from './types';
 export const RoomSchema = z.object({
   roomNumber: z.string().min(1, { message: "Room number is required." }),
   capacity: z.coerce.number().int().min(1, { message: "Capacity must be at least 1." }),
-  rent: z.coerce.number().min(0, { message: "Rent must be a positive number." }),
+  rent: z.coerce.number().min(0, { message: "Rent must be a non-negative number." }),
+  floorNumber: z.coerce.number().int().min(0, { message: "Floor number must be 0 or greater (e.g., 0 for Ground Floor)." }),
+  facilities: z.string().optional(), // Handled as comma-separated string in form
 });
 
 export const ResidentStatusSchema = z.enum(['active', 'upcoming', 'former']);
+
+const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
@@ -20,14 +24,14 @@ export const ResidentSchema = z.object({
     message: "Invalid joining date.",
   }),
   personalInfo: z.string().optional(),
-  roomId: z.string().nullable(),
+  roomId: z.string().nullable().optional().or(z.literal(UNASSIGNED_ROOM_SENTINEL).transform(() => null)),
   status: ResidentStatusSchema,
-  photoUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).nullable().optional(),
-  idProofUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).nullable().optional(),
+  photoUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).max(5 * 1024 * 1024, { message: "Photo image too large (max 5MB)." }).nullable().optional(),
+  idProofUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).max(5 * 1024 * 1024, { message: "ID proof image too large (max 5MB)." }).nullable().optional(),
   guardianName: z.string().nullable().optional(),
   guardianContact: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
-  if (data.status === 'active' && !data.roomId) {
+  if (data.status === 'active' && data.roomId === null) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Active residents must be assigned to a room.",

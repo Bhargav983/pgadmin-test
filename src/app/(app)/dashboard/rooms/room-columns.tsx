@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -34,6 +35,25 @@ export const getRoomColumns = (
     cell: ({ row }) => <div className="font-medium">{row.getValue("roomNumber")}</div>,
   },
   {
+    accessorKey: "floorNumber",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Floor
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
+    },
+    cell: ({ row }) => {
+      const floor = row.getValue("floorNumber");
+      if (floor === 0) return "Ground";
+      return `Floor ${floor}`;
+    },
+  },
+  {
     accessorKey: "capacity",
     header: "Capacity",
     cell: ({ row }) => <div>{row.getValue("capacity")} persons</div>,
@@ -46,15 +66,26 @@ export const getRoomColumns = (
       const occupancy = row.original.currentOccupancy;
       const occupancyRate = capacity > 0 ? (occupancy / capacity) * 100 : 0;
       let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "default";
-      if (occupancyRate < 50) badgeVariant = "secondary";
-      if (occupancyRate >= 100) badgeVariant = "destructive";
+      let badgeStyle: React.CSSProperties = {};
+
+      if (occupancy === 0 && capacity > 0) { // Vacant
+        badgeVariant = "secondary";
+        badgeStyle = { backgroundColor: 'hsl(var(--chart-2))', color: 'hsl(var(--primary-foreground))' }; // Using chart-2 (greenish)
+      } else if (occupancy >= capacity && capacity > 0) { // Full
+        badgeVariant = "destructive";
+      } else if (occupancy > 0) { // Partially occupied
+         badgeVariant = "default"; // Use primary by default
+         badgeStyle = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
+      } else { // 0 capacity or other edge cases
+        badgeVariant = "outline";
+      }
 
 
       return (
         <div className="flex items-center space-x-2">
            <span>{occupancy} / {capacity}</span>
-           <Badge variant={badgeVariant} className={occupancy === capacity ? "bg-destructive text-destructive-foreground" : "bg-green-500 text-white"}>
-            {occupancy === capacity ? "Full" : `${Math.round(occupancyRate)}%`}
+           <Badge style={badgeStyle} variant={badgeVariant}>
+            {occupancy === capacity && capacity > 0 ? "Full" : (occupancy === 0 && capacity > 0 ? "Vacant" : `${Math.round(occupancyRate)}%`)}
           </Badge>
         </div>
       );
@@ -80,6 +111,21 @@ export const getRoomColumns = (
         currency: "INR",
       }).format(amount);
       return <div className="text-right font-medium">{formatted}</div>;
+    },
+  },
+  {
+    accessorKey: "facilities",
+    header: "Facilities",
+    cell: ({ row }) => {
+      const facilities = row.original.facilities;
+      if (!facilities || facilities.length === 0) {
+        return <span className="text-muted-foreground">-</span>;
+      }
+      return (
+        <div className="truncate max-w-xs" title={facilities.join(', ')}>
+          {facilities.join(', ')}
+        </div>
+      );
     },
   },
   {

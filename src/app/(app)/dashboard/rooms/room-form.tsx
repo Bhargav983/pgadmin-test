@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -12,8 +13,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -40,25 +43,31 @@ export function RoomForm({ isOpen, onClose, onSubmit, defaultValues, isEditing }
       roomNumber: defaultValues?.roomNumber || "",
       capacity: defaultValues?.capacity || 1,
       rent: defaultValues?.rent || 0,
+      floorNumber: defaultValues?.floorNumber || 0,
+      facilities: defaultValues?.facilities?.join(', ') || "",
     },
   });
 
   React.useEffect(() => {
-    if (defaultValues) {
-      form.reset({
-        roomNumber: defaultValues.roomNumber || "",
-        capacity: defaultValues.capacity || 1,
-        rent: defaultValues.rent || 0,
-      });
-    } else {
-      form.reset({ roomNumber: "", capacity: 1, rent: 0 });
+    if (isOpen) {
+      if (defaultValues) {
+        form.reset({
+          roomNumber: defaultValues.roomNumber || "",
+          capacity: defaultValues.capacity || 1,
+          rent: defaultValues.rent || 0,
+          floorNumber: defaultValues.floorNumber || 0,
+          facilities: defaultValues.facilities?.join(', ') || "",
+        });
+      } else {
+        form.reset({ roomNumber: "", capacity: 1, rent: 0, floorNumber: 0, facilities: "" });
+      }
     }
   }, [defaultValues, form, isOpen]);
 
 
   const handleFormSubmit = async (values: RoomFormValues) => {
     await onSubmit(values);
-    form.reset(); // Reset form after successful submission
+    // form.reset(); // Resetting is handled by useEffect on isOpen change now
   };
 
 
@@ -88,6 +97,19 @@ export function RoomForm({ isOpen, onClose, onSubmit, defaultValues, isEditing }
             />
             <FormField
               control={form.control}
+              name="floorNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Floor Number</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g., 0 for Ground, 1 for First" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="capacity"
               render={({ field }) => (
                 <FormItem>
@@ -108,6 +130,22 @@ export function RoomForm({ isOpen, onClose, onSubmit, defaultValues, isEditing }
                   <FormControl>
                     <Input type="number" placeholder="e.g., 5000" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="facilities"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Facilities (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="e.g., AC, Wi-Fi, Geyser, Balcony" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Enter facilities separated by commas.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
