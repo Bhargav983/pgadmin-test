@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
@@ -51,6 +51,8 @@ const residentStatuses: { value: ResidentStatus; label: string }[] = [
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
+const SELECT_FLOOR_SENTINEL = "__SELECT_FLOOR__";
+
 
 export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRooms, onCancel }: ResidentFormProps) {
   const { toast } = useToast();
@@ -71,29 +73,61 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
     },
   });
 
+  const [uiSelectedFloor, setUiSelectedFloor] = React.useState<string>(SELECT_FLOOR_SENTINEL);
+
   React.useEffect(() => {
-    if (defaultValues) {
-      form.reset({
-        name: defaultValues.name || "",
-        contact: defaultValues.contact || "",
-        enquiryDate: defaultValues.enquiryDate || null,
-        joiningDate: defaultValues.joiningDate || null,
-        personalInfo: defaultValues.personalInfo || "",
-        roomId: defaultValues.roomId || null,
-        status: defaultValues.status || (isEditing ? "active" : "upcoming"),
-        photoUrl: defaultValues.photoUrl || null,
-        idProofUrl: defaultValues.idProofUrl || null,
-        guardianName: defaultValues.guardianName || "",
-        guardianContact: defaultValues.guardianContact || "",
-      });
+    const initialRoomId = defaultValues?.roomId || null;
+    const initialStatus = defaultValues?.status || (isEditing ? "active" : "upcoming");
+
+    form.reset({
+      name: defaultValues?.name || "",
+      contact: defaultValues?.contact || "",
+      enquiryDate: defaultValues?.enquiryDate || null,
+      joiningDate: defaultValues?.joiningDate || null,
+      personalInfo: defaultValues?.personalInfo || "",
+      roomId: initialRoomId,
+      status: initialStatus,
+      photoUrl: defaultValues?.photoUrl || null,
+      idProofUrl: defaultValues?.idProofUrl || null,
+      guardianName: defaultValues?.guardianName || "",
+      guardianContact: defaultValues?.guardianContact || "",
+    });
+
+    if (initialRoomId) {
+      const assignedRoom = availableRooms.find(r => r.id === initialRoomId);
+      if (assignedRoom) {
+        setUiSelectedFloor(assignedRoom.floorNumber.toString());
+      } else {
+        setUiSelectedFloor(SELECT_FLOOR_SENTINEL); // Assigned room not found
+      }
     } else {
-      form.reset({
-        name: "", contact: "", enquiryDate: null, joiningDate: null,
-        personalInfo: "", roomId: null, status: "upcoming",
-        photoUrl: null, idProofUrl: null, guardianName: "", guardianContact: ""
-      });
+      setUiSelectedFloor(SELECT_FLOOR_SENTINEL); // No room assigned by default
     }
-  }, [defaultValues, form, isEditing]);
+  }, [defaultValues, form, availableRooms, isEditing]);
+
+
+  const floorOptions = React.useMemo(() => {
+    const floors = new Set<number>();
+    availableRooms.forEach(room => floors.add(room.floorNumber));
+    return Array.from(floors).sort((a, b) => a - b).map(f => ({
+      value: f.toString(),
+      label: f === 0 ? "Ground Floor" : `Floor ${f}`
+    }));
+  }, [availableRooms]);
+
+  const roomsOnSelectedFloor = React.useMemo(() => {
+    if (uiSelectedFloor === SELECT_FLOOR_SENTINEL) {
+      return [];
+    }
+    return availableRooms.filter(room => room.floorNumber.toString() === uiSelectedFloor);
+  }, [availableRooms, uiSelectedFloor]);
+
+  const handleFloorSelect = (selectedFloorValue: string) => {
+    setUiSelectedFloor(selectedFloorValue);
+    form.setValue('roomId', null); // Reset room when floor changes
+    form.trigger('roomId');
+  };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: "photoUrl" | "idProofUrl") => {
     const file = event.target.files?.[0];
@@ -137,7 +171,6 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       idProofUrl: values.idProofUrl || null, 
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
-      // roomId is already correctly null or a string due to Select's onChange handling
     };
     await onSubmit(processedValues);
   };
@@ -292,7 +325,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Status & Dates</CardTitle>
+            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Status, Dates & Room Assignment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -373,39 +406,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="roomId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Assign Room</FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      field.onChange(value === UNASSIGNED_ROOM_SENTINEL ? null : value);
-                    }}
-                    value={field.value === null || field.value === undefined ? UNASSIGNED_ROOM_SENTINEL : field.value}
-                    disabled={form.getValues("status") === 'former'}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a room (optional for upcoming)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                       <SelectItem value={UNASSIGNED_ROOM_SENTINEL}>Unassigned</SelectItem>
-                      {availableRooms
-                        .filter(room => room.id && room.id.trim() !== "")
-                        .map((room) => (
-                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
-                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
-                          </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
             <FormField
               control={form.control}
               name="status"
@@ -416,7 +417,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                     onValueChange={(value) => {
                       field.onChange(value);
                       if (value === 'former') {
-                        form.setValue('roomId', null); 
+                        form.setValue('roomId', null);
+                        setUiSelectedFloor(SELECT_FLOOR_SENTINEL); 
                       }
                     }}
                     value={field.value}>
@@ -437,6 +439,62 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 </FormItem>
               )}
             />
+            
+            <FormItem>
+                <FormLabel>Select Floor</FormLabel>
+                <Select
+                    onValueChange={handleFloorSelect}
+                    value={uiSelectedFloor}
+                    disabled={form.getValues("status") === 'former'}
+                >
+                    <FormControl>
+                    <SelectTrigger>
+                        <SelectValue placeholder="-- Select a Floor --" />
+                    </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                    <SelectItem value={SELECT_FLOOR_SENTINEL}>-- Select a Floor --</SelectItem>
+                    {floorOptions.map((floor) => (
+                        <SelectItem key={floor.value} value={floor.value}>
+                        {floor.label}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+            </FormItem>
+
+            <FormField
+              control={form.control}
+              name="roomId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Assign Room</FormLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value === UNASSIGNED_ROOM_SENTINEL ? null : value);
+                    }}
+                    value={field.value === null || field.value === undefined ? UNASSIGNED_ROOM_SENTINEL : field.value}
+                    disabled={form.getValues("status") === 'former' || uiSelectedFloor === SELECT_FLOOR_SENTINEL}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={uiSelectedFloor === SELECT_FLOOR_SENTINEL ? "Select a floor first" : "Select a room"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                       <SelectItem value={UNASSIGNED_ROOM_SENTINEL}>Unassigned</SelectItem>
+                      {roomsOnSelectedFloor
+                        .map((room) => (
+                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
+                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
+                          </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 
@@ -450,3 +508,4 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
     </Form>
   );
 }
+
