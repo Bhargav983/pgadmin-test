@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUpDown, MoreHorizontal, Pencil, CheckCircle, RotateCcw, XCircle, Settings2 } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Pencil, CheckCircle, RotateCcw, XCircle, Settings2, Trash2 } from "lucide-react"; // Added Trash2
 import { format } from "date-fns";
 
 const getStatusBadgeVariant = (status: ComplaintStatus): "default" | "secondary" | "destructive" | "outline" => {
