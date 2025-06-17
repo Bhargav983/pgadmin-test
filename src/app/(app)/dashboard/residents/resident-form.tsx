@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail } from "lucide-react"; // Added Mail icon
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
@@ -60,6 +60,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
     resolver: zodResolver(ResidentSchema),
     defaultValues: {
       name: defaultValues?.name || "",
+      email: defaultValues?.email || "", // Added email default
       contact: defaultValues?.contact || "",
       enquiryDate: defaultValues?.enquiryDate || null,
       joiningDate: defaultValues?.joiningDate || null,
@@ -68,8 +69,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       status: defaultValues?.status || "upcoming",
       photoUrl: defaultValues?.photoUrl || null,
       idProofUrl: defaultValues?.idProofUrl || null,
-      guardianName: defaultValues?.guardianName || "",
-      guardianContact: defaultValues?.guardianContact || "",
+      guardianName: defaultValues?.guardianName || null,
+      guardianContact: defaultValues?.guardianContact || null,
     },
   });
 
@@ -81,6 +82,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
 
     form.reset({
       name: defaultValues?.name || "",
+      email: defaultValues?.email || "", // Reset email
       contact: defaultValues?.contact || "",
       enquiryDate: defaultValues?.enquiryDate || null,
       joiningDate: defaultValues?.joiningDate || null,
@@ -124,7 +126,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
 
   const handleFloorSelect = (selectedFloorValue: string) => {
     setUiSelectedFloor(selectedFloorValue);
-    form.setValue('roomId', null); // Reset room when floor changes
+    form.setValue('roomId', null); 
     form.trigger('roomId');
   };
 
@@ -194,6 +196,19 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., John Doe" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="e.g., john.doe@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -508,4 +523,3 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
     </Form>
   );
 }
-

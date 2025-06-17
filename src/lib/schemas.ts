@@ -1,6 +1,7 @@
 
 import { z } from 'zod';
 import { complaintCategories } from './types';
+import type { RecipientType } from './types';
 
 export const RoomSchema = z.object({
   roomNumber: z.string().min(1, { message: "Room number is required." }),
@@ -16,6 +17,7 @@ const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
+  email: z.string().email({ message: "Invalid email address." }), // Added email validation
   contact: z.string().min(1, { message: "Contact information is required." }),
   enquiryDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
     message: "Invalid enquiry date.",
@@ -135,3 +137,25 @@ export const ComplaintSchema = z.object({
   }
 });
 
+export const AnnouncementSchema = z.object({
+  recipientType: z.enum(['all', 'specific', 'selected'] as [RecipientType, ...RecipientType[]]),
+  specificResidentId: z.string().optional(),
+  selectedResidentIds: z.array(z.string()).optional(),
+  subject: z.string().min(1, "Subject is required."),
+  body: z.string().min(1, "Email body is required."),
+}).superRefine((data, ctx) => {
+  if (data.recipientType === 'specific' && !data.specificResidentId) {
+    ctx.addIssue({
+      path: ['specificResidentId'],
+      message: 'Please select a specific resident.',
+      code: z.ZodIssueCode.custom,
+    });
+  }
+  if (data.recipientType === 'selected' && (!data.selectedResidentIds || data.selectedResidentIds.length === 0)) {
+    ctx.addIssue({
+      path: ['selectedResidentIds'],
+      message: 'Please select at least one resident.',
+      code: z.ZodIssueCode.custom,
+    });
+  }
+});

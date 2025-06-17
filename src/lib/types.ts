@@ -49,6 +49,7 @@ export interface Room {
 export interface Resident {
   id:string;
   name: string;
+  email: string; // Added email field
   contact: string;
   enquiryDate?: string | null;
   joiningDate?: string | null;
@@ -142,3 +143,13 @@ export interface ReceiptData {
   pgName?: string; // Optional, can be defaulted
 }
 
+// For Announcements
+export type RecipientType = 'all' | 'specific' | 'selected';
+
+export interface AnnouncementFormValues {
+  recipientType: RecipientType;
+  specificResidentId?: string;
+  selectedResidentIds?: string[];
+  subject: string;
+  body: string;
+}
