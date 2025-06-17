@@ -405,20 +405,7 @@ export default function BillingPage() {
           </Card>
         </div>
       </section>
-      <Card className="shadow-lg mt-8">
-        <CardHeader>
-            <CardTitle className="font-headline">Export Options</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <p className="text-muted-foreground">
-                Direct export to Excel or PDF for reports is a complex feature typically requiring server-side processing or larger client-side libraries.
-                For now, you can use your browser's print functionality (Ctrl/Cmd + P) for individual pages or tables, or copy-paste data from tables into a spreadsheet program.
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-                We plan to explore more advanced export options in future updates!
-            </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
+
