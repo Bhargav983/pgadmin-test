@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Resident, Room, Payment, ActivityLogEntry } from '@/lib/types';
 import { format } from 'date-fns';
-import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud, IndianRupee } from 'lucide-react';
+import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud, IndianRupee, DollarSign } from 'lucide-react';
 import NextImage from 'next/image';
 
 
@@ -52,6 +52,8 @@ export default function ResidentDetailPage() {
         guardianName: foundResident.guardianName || null,
         guardianContact: foundResident.guardianContact || null,
         monthlyDiscountAmount: foundResident.monthlyDiscountAmount || null,
+        advanceAmount: foundResident.advanceAmount || null,
+        advanceReceivedDate: foundResident.advanceReceivedDate || null,
       });
       setRooms(storedRooms);
     } else {
@@ -155,6 +157,12 @@ export default function ResidentDetailPage() {
                     <div><BedDouble className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Current Room:</strong> {currentRoom ? currentRoom.roomNumber : (resident.status === 'former' ? 'Vacated' : 'Unassigned')}</div>
                     {resident.monthlyDiscountAmount && resident.monthlyDiscountAmount > 0 && (
                       <div><IndianRupee className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Monthly Discount:</strong> ₹{resident.monthlyDiscountAmount.toLocaleString()}</div>
+                    )}
+                     {resident.advanceAmount && resident.advanceAmount > 0 && (
+                        <>
+                            <div><DollarSign className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Advance Paid:</strong> ₹{resident.advanceAmount.toLocaleString()}</div>
+                            {resident.advanceReceivedDate && <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Advance Date:</strong> {format(new Date(resident.advanceReceivedDate), 'dd MMM, yyyy')}</div>}
+                        </>
                     )}
                     <div className="md:col-span-2"><strong className="text-muted-foreground">Personal Info:</strong> {resident.personalInfo || 'N/A'}</div>
                 </CardContent>

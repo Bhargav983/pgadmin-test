@@ -70,7 +70,9 @@ export interface Resident {
   idProofUrl?: string | null; 
   guardianName?: string | null;
   guardianContact?: string | null;
-  monthlyDiscountAmount?: number | null; // New field for discount
+  monthlyDiscountAmount?: number | null;
+  advanceAmount?: number | null; // New field for advance/deposit
+  advanceReceivedDate?: string | null; // New field for date advance was received
 }
 
 export type AttendanceStatus = 'Pending' | 'Present' | 'Late' | 'Absent' | 'On Leave';

@@ -33,6 +33,10 @@ export const ResidentSchema = z.object({
   guardianName: z.string().nullable().optional(),
   guardianContact: z.string().nullable().optional(),
   monthlyDiscountAmount: z.coerce.number().nonnegative({ message: "Discount must be a non-negative number."}).nullable().optional(),
+  advanceAmount: z.coerce.number().nonnegative({ message: "Advance amount must be a non-negative number." }).nullable().optional(),
+  advanceReceivedDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
+    message: "Invalid advance received date.",
+  }),
 }).superRefine((data, ctx) => {
   if (data.status === 'active' && data.roomId === null) {
     ctx.addIssue({
@@ -53,6 +57,20 @@ export const ResidentSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "Guardian contact must be a valid 10-digit phone number or empty.",
         path: ["guardianContact"],
+    });
+  }
+  if (data.advanceAmount && !data.advanceReceivedDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Advance received date is required if advance amount is provided.",
+      path: ["advanceReceivedDate"],
+    });
+  }
+  if (!data.advanceAmount && data.advanceReceivedDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Advance amount is required if advance received date is provided.",
+      path: ["advanceAmount"],
     });
   }
 });

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail, IndianRupee } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail, IndianRupee, DollarSign } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
@@ -33,6 +33,7 @@ import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/t
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
 
 interface ResidentFormProps {
   onSubmit: (values: ResidentFormValues) => Promise<void>;
@@ -82,6 +83,8 @@ export function ResidentForm({
       guardianName: "",
       guardianContact: "",
       monthlyDiscountAmount: null,
+      advanceAmount: null,
+      advanceReceivedDate: null,
     };
 
     if (defaultValues) {
@@ -91,6 +94,8 @@ export function ResidentForm({
         enquiryDate: defaultValues.enquiryDate && isValid(new Date(defaultValues.enquiryDate)) ? format(new Date(defaultValues.enquiryDate), 'yyyy-MM-dd') : null,
         joiningDate: defaultValues.joiningDate && isValid(new Date(defaultValues.joiningDate)) ? format(new Date(defaultValues.joiningDate), 'yyyy-MM-dd') : null,
         monthlyDiscountAmount: defaultValues.monthlyDiscountAmount || null,
+        advanceAmount: defaultValues.advanceAmount || null,
+        advanceReceivedDate: defaultValues.advanceReceivedDate && isValid(new Date(defaultValues.advanceReceivedDate)) ? format(new Date(defaultValues.advanceReceivedDate), 'yyyy-MM-dd') : null,
       };
     }
     
@@ -203,6 +208,8 @@ export function ResidentForm({
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
       roomId: values.roomId === UNASSIGNED_ROOM_SENTINEL ? null : values.roomId,
       monthlyDiscountAmount: values.monthlyDiscountAmount ? Number(values.monthlyDiscountAmount) : null,
+      advanceAmount: values.advanceAmount ? Number(values.advanceAmount) : null,
+      advanceReceivedDate: values.advanceReceivedDate ? format(parseISO(values.advanceReceivedDate), 'yyyy-MM-dd') : null,
     };
     await onSubmit(processedValues);
   };
@@ -544,6 +551,8 @@ export function ResidentForm({
                 </FormItem>
               )}
             />
+            <Separator />
+             <FormLabel className="text-base font-semibold text-foreground">Financials</FormLabel>
              <FormField
               control={form.control}
               name="monthlyDiscountAmount"
@@ -564,6 +573,67 @@ export function ResidentForm({
                 </FormItem>
               )}
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="advanceAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Advance Amount (₹) (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 10000" 
+                        {...field} 
+                        value={field.value ?? ""}
+                        onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormDescription>One-time advance/security deposit.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="advanceReceivedDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Advance Received Date (Optional)</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            disabled={!form.watch("advanceAmount")} // Disable if no advance amount
+                          >
+                            {field.value && isValid(parseISO(field.value)) ? (
+                              format(parseISO(field.value), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value ? parseISO(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date ? format(date, 'yyyy-MM-dd') : null)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </CardContent>
         </Card>
 
