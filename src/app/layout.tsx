@@ -1,8 +1,10 @@
+
 import type { Metadata } from 'next';
 import { PT_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/auth-context';
+import { ThemeProvider } from '@/context/theme-context'; // Added ThemeProvider
 
 const ptSans = PT_Sans({
   subsets: ['latin'],
@@ -38,10 +40,12 @@ export default function RootLayout({
         */}
       </head>
       <body className={`${ptSans.variable} ${playfairDisplay.variable} font-body antialiased`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <ThemeProvider> {/* Wrapped with ThemeProvider */}
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
