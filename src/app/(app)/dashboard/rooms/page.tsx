@@ -8,7 +8,7 @@ import { getRoomColumns } from "./room-columns";
 import { RoomForm } from "./room-form";
 import { RoomCard } from "@/components/room-card";
 import type { Room, RoomFormValues, Resident } from "@/lib/types";
-import { PlusCircle, List, LayoutGrid, Filter } from "lucide-react";
+import { PlusCircle, List, LayoutGrid, Filter, Layers } from "lucide-react"; // Added Layers
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -54,7 +54,7 @@ export default function RoomsPage() {
   const [groupedRoomsByFloor, setGroupedRoomsByFloor] = useState<FloorGroup[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [selectedFloorFilter, setSelectedFloorFilter] = useState<string>('all'); // Renamed for clarity
+  const [selectedFloorFilter, setSelectedFloorFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -145,7 +145,7 @@ export default function RoomsPage() {
 
   }, [rooms, activeTab, selectedFloorFilter, searchTerm, viewMode]);
 
-  const floorNumbersForFilter = useMemo(() => { // Renamed for clarity
+  const floorNumbersForFilter = useMemo(() => {
     const uniqueFloors = Array.from(new Set(rooms.map(room => room.floorNumber))).sort((a, b) => a - b);
     return uniqueFloors;
   }, [rooms]);
