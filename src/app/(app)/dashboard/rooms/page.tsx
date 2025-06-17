@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 
 const getStoredData = <T,>(key: string): T[] => {
@@ -41,14 +42,19 @@ const setStoredData = <T,>(key: string, data: T[]): void => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
+interface FloorGroup {
+  floorNumber: number;
+  rooms: Room[];
+}
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [allResidents, setAllResidents] = useState<Resident[]>([]); // Added to store all residents
+  const [allResidents, setAllResidents] = useState<Resident[]>([]);
   const [filteredRooms, setFilteredRooms] = useState<Room[]>([]);
+  const [groupedRoomsByFloor, setGroupedRoomsByFloor] = useState<FloorGroup[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [selectedFloor, setSelectedFloor] = useState<string>('all');
+  const [selectedFloorFilter, setSelectedFloorFilter] = useState<string>('all'); // Renamed for clarity
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -64,7 +70,7 @@ export default function RoomsPage() {
         ...res,
         status: res.status || 'active'
     }));
-    setAllResidents(storedResidents); // Store all residents
+    setAllResidents(storedResidents);
 
     const roomsWithOccupancy = storedRooms.map(room => {
       const currentOccupancy = storedResidents.filter(resident => resident.roomId === room.id && (resident.status === 'active' || resident.status === 'upcoming')).length;
@@ -78,7 +84,6 @@ export default function RoomsPage() {
     fetchRoomsAndResidentsData();
     const handleStorageChange = () => fetchRoomsAndResidentsData();
     window.addEventListener('storage', handleStorageChange);
-    // Listen for custom dataChanged event if residents are updated elsewhere
     const handleDataChangedEvent = (event: Event) => {
         const customEvent = event as CustomEvent;
         if (customEvent.detail?.storeKey === 'pgResidents') {
@@ -94,31 +99,53 @@ export default function RoomsPage() {
   }, [fetchRoomsAndResidentsData]);
 
   useEffect(() => {
-    let currentFilteredRooms = [...rooms];
+    let currentFilteredRoomsInternal = [...rooms];
 
     if (activeTab === 'full') {
-      currentFilteredRooms = rooms.filter(room => room.capacity > 0 && room.currentOccupancy === room.capacity);
+      currentFilteredRoomsInternal = rooms.filter(room => room.capacity > 0 && room.currentOccupancy === room.capacity);
     } else if (activeTab === 'available') {
-      currentFilteredRooms = rooms.filter(room => room.currentOccupancy > 0 && room.currentOccupancy < room.capacity);
+      currentFilteredRoomsInternal = rooms.filter(room => room.currentOccupancy > 0 && room.currentOccupancy < room.capacity);
     } else if (activeTab === 'vacant') {
-      currentFilteredRooms = rooms.filter(room => room.currentOccupancy === 0);
+      currentFilteredRoomsInternal = rooms.filter(room => room.currentOccupancy === 0);
     }
 
-    if (selectedFloor !== 'all') {
-      currentFilteredRooms = currentFilteredRooms.filter(room => room.floorNumber === parseInt(selectedFloor));
+    if (selectedFloorFilter !== 'all') {
+      currentFilteredRoomsInternal = currentFilteredRoomsInternal.filter(room => room.floorNumber === parseInt(selectedFloorFilter));
     }
 
-    if (searchTerm) { // Apply search term for both table and card view
-        currentFilteredRooms = currentFilteredRooms.filter(room =>
+    if (searchTerm) {
+        currentFilteredRoomsInternal = currentFilteredRoomsInternal.filter(room =>
             room.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (room.facilities && room.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase()))
         );
     }
+    
+    currentFilteredRoomsInternal.sort((a,b) => a.roomNumber.localeCompare(b.roomNumber));
+    setFilteredRooms(currentFilteredRoomsInternal);
 
-    setFilteredRooms(currentFilteredRooms.sort((a,b) => a.roomNumber.localeCompare(b.roomNumber)));
-  }, [rooms, activeTab, selectedFloor, searchTerm]);
+    // Grouping logic for card view
+    if (viewMode === 'card') {
+        const groups: Record<number, Room[]> = {};
+        currentFilteredRoomsInternal.forEach(room => {
+            const floor = room.floorNumber;
+            if (!groups[floor]) {
+            groups[floor] = [];
+            }
+            groups[floor].push(room);
+        });
 
-  const floorNumbers = useMemo(() => {
+        const processedGroups = Object.entries(groups)
+            .map(([floorNum, roomList]) => ({
+            floorNumber: parseInt(floorNum),
+            rooms: roomList.sort((a, b) => a.roomNumber.localeCompare(b.roomNumber))
+            }))
+            .sort((a, b) => a.floorNumber - b.floorNumber);
+        setGroupedRoomsByFloor(processedGroups);
+    }
+
+  }, [rooms, activeTab, selectedFloorFilter, searchTerm, viewMode]);
+
+  const floorNumbersForFilter = useMemo(() => { // Renamed for clarity
     const uniqueFloors = Array.from(new Set(rooms.map(room => room.floorNumber))).sort((a, b) => a - b);
     return uniqueFloors;
   }, [rooms]);
@@ -204,21 +231,23 @@ export default function RoomsPage() {
 
   const columns = getRoomColumns(openEditForm, handleDeleteConfirmation);
 
+  const getFloorLabel = (floorNum: number) => floorNum === 0 ? "Ground Floor" : `Floor ${floorNum}`;
+
   return (
     <div className="container mx-auto py-4 space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-headline font-semibold">Manage Rooms</h1>
         <div className="flex flex-wrap items-center gap-2">
-           <Select value={selectedFloor} onValueChange={setSelectedFloor}>
+           <Select value={selectedFloorFilter} onValueChange={setSelectedFloorFilter}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <Filter className="mr-2 h-4 w-4 opacity-50" />
               <SelectValue placeholder="Filter by Floor" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Floors</SelectItem>
-              {floorNumbers.map(floor => (
+              {floorNumbersForFilter.map(floor => (
                 <SelectItem key={floor} value={floor.toString()}>
-                  {floor === 0 ? "Ground Floor" : `Floor ${floor}`}
+                  {getFloorLabel(floor)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -239,16 +268,15 @@ export default function RoomsPage() {
           placeholder="Search by room no. or facility..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm mb-4" // Applied to both views for consistency
+          className="max-w-sm mb-4"
       />
-
 
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-          <TabsTrigger value="all">All ({rooms.filter(r => (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
-          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
-          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
-          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0 && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="all">All ({rooms.filter(r => (selectedFloorFilter === 'all' || r.floorNumber === parseInt(selectedFloorFilter)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity && (selectedFloorFilter === 'all' || r.floorNumber === parseInt(selectedFloorFilter)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity && (selectedFloorFilter === 'all' || r.floorNumber === parseInt(selectedFloorFilter)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0 && (selectedFloorFilter === 'all' || r.floorNumber === parseInt(selectedFloorFilter)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -261,14 +289,26 @@ export default function RoomsPage() {
           </div>
         )
       ) : (
-        filteredRooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredRooms.map(room => (
-              <RoomCard key={room.id} room={room} residents={allResidents} onEdit={openEditForm} onDelete={handleDeleteConfirmation} />
+        groupedRoomsByFloor.length > 0 ? (
+          <div className="space-y-8 mt-4">
+            {groupedRoomsByFloor.map(floorGroup => (
+              <section key={floorGroup.floorNumber}>
+                <h2 className="text-2xl font-headline font-semibold mb-1 flex items-center">
+                  <Layers className="mr-3 h-6 w-6 text-primary" />
+                  {getFloorLabel(floorGroup.floorNumber)}
+                  <span className="ml-2 text-base font-normal text-muted-foreground">({floorGroup.rooms.length} room(s))</span>
+                </h2>
+                <Separator className="mb-4" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {floorGroup.rooms.map(room => (
+                    <RoomCard key={room.id} room={room} residents={allResidents} onEdit={openEditForm} onDelete={handleDeleteConfirmation} />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         ) : (
-          <div className="col-span-full text-center py-10 bg-card border rounded-md">
+          <div className="col-span-full text-center py-10 bg-card border rounded-md mt-4">
             <p className="text-muted-foreground">No rooms match the current filter criteria.</p>
           </div>
         )
@@ -302,3 +342,4 @@ export default function RoomsPage() {
     </div>
   );
 }
+
