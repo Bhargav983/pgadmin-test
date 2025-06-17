@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
-// Helper to get data from localStorage
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(key);
@@ -31,7 +30,6 @@ interface PaymentOverview {
   overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[];
 }
 
-// Define current date and months array outside component to avoid re-renders if used in default state
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -49,11 +47,14 @@ export default function BillingPage() {
 
   const calculatePaymentOverview = useCallback(() => {
     setIsLoading(true);
-    const residents = getStoredData<Resident>('pgResidents').map(r => ({ ...r, payments: r.payments || [] }));
+    // Filter for active residents only for billing calculations
+    const activeResidents = getStoredData<Resident>('pgResidents')
+      .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+      .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
 
-    const currentDate = new Date(); // Use a fresh Date for calculations
-    setCurrentDisplayDate(currentDate); // Update for display
+    const currentDate = new Date(); 
+    setCurrentDisplayDate(currentDate); 
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
 
@@ -63,19 +64,16 @@ export default function BillingPage() {
     const allPayments: (Payment & { residentName: string; roomNumber: string })[] = [];
     const overdueResidentsList: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[] = [];
 
-    residents.forEach(resident => {
+    activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return;
 
-      // Populate recent payments
       resident.payments.forEach(p => {
         allPayments.push({ ...p, residentName: resident.name, roomNumber: room.roomNumber });
       });
       
-      // Calculate current month status
       const paymentThisMonth = resident.payments.find(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id);
       if (paymentThisMonth) {
-         // Sum all payments for the current month/year for this resident/room
         const totalPaidCurrentMonth = resident.payments
             .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
             .reduce((sum, p) => sum + p.amount, 0);
@@ -88,7 +86,6 @@ export default function BillingPage() {
         upcomingTotal += room.rent;
       }
 
-      // Calculate overdue payments
       let totalDueFromResident = 0;
       let lastFullyPaidPeriod = { year: 0, month: 0 };
 
@@ -212,7 +209,7 @@ export default function BillingPage() {
             <CardContent>
               <div className="text-2xl font-bold">₹{paymentOverview.upcoming.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
-                Expected from unpaid/partially paid residents this month
+                Expected from unpaid/partially paid active residents this month
               </p>
             </CardContent>
           </Card>
@@ -226,7 +223,7 @@ export default function BillingPage() {
             <CardContent>
               <div className="text-2xl font-bold text-destructive">₹{paymentOverview.overdue.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
-                Total outstanding amount from previous periods
+                Total outstanding from active residents for previous periods
               </p>
             </CardContent>
           </Card>
@@ -237,7 +234,7 @@ export default function BillingPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
-            <CardDescription>Last 5 recorded payment transactions.</CardDescription>
+            <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
           </CardHeader>
           <CardContent>
             {paymentOverview.recentPayments.length > 0 ? (
@@ -264,7 +261,7 @@ export default function BillingPage() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-muted-foreground">No recent payments recorded.</p>
+              <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
             )}
           </CardContent>
         </Card>
@@ -272,7 +269,7 @@ export default function BillingPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
-            <CardDescription>Residents with outstanding payments from previous periods.</CardDescription>
+            <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
           </CardHeader>
           <CardContent>
             {paymentOverview.overdueResidents.length > 0 ? (
@@ -297,7 +294,7 @@ export default function BillingPage() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-muted-foreground">No residents with overdue payments currently.</p>
+              <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
             )}
           </CardContent>
         </Card>
@@ -321,5 +318,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
-    

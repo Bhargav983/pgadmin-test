@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -19,14 +20,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// Helper to get data from localStorage
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(key);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    console.error("Failed to parse localStorage data for key:", key, e);
+    return [];
+  }
 };
 
-// Helper to set data to localStorage
 const setStoredData = <T,>(key: string, data: T[]): void => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(key, JSON.stringify(data));
@@ -44,10 +48,14 @@ export default function RoomsPage() {
 
   const fetchRoomsAndOccupancy = useCallback(() => {
     const storedRooms = getStoredData<Room>('pgRooms');
-    const storedResidents = getStoredData<Resident>('pgResidents');
+    const storedResidents = getStoredData<Resident>('pgResidents').map(res => ({
+        ...res,
+        status: res.status || 'active' 
+    }));
 
     const roomsWithOccupancy = storedRooms.map(room => {
-      const currentOccupancy = storedResidents.filter(resident => resident.roomId === room.id).length;
+      // Occupancy includes active and upcoming residents assigned to this room
+      const currentOccupancy = storedResidents.filter(resident => resident.roomId === room.id && (resident.status === 'active' || resident.status === 'upcoming')).length;
       return { ...room, currentOccupancy };
     });
     setRooms(roomsWithOccupancy);
@@ -55,6 +63,10 @@ export default function RoomsPage() {
 
   useEffect(() => {
     fetchRoomsAndOccupancy();
+    // Listen to storage changes to keep data in sync across tabs/components if needed
+    const handleStorageChange = () => fetchRoomsAndOccupancy();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchRoomsAndOccupancy]);
 
 
@@ -63,11 +75,11 @@ export default function RoomsPage() {
       const newRoom: Room = { 
         ...values, 
         id: crypto.randomUUID(),
-        currentOccupancy: 0, // Initial occupancy
+        currentOccupancy: 0, 
       };
       const updatedRooms = [...rooms, newRoom];
       setStoredData('pgRooms', updatedRooms);
-      fetchRoomsAndOccupancy(); // Re-fetch to update occupancy if needed, though new rooms are 0
+      fetchRoomsAndOccupancy(); 
       setIsFormOpen(false);
       toast({ title: "Room Added", description: `Room ${newRoom.roomNumber} has been successfully added.`, variant: "default" });
     } catch (error) {
@@ -79,10 +91,10 @@ export default function RoomsPage() {
     if (!editingRoom) return;
     try {
       const updatedRooms = rooms.map((room) =>
-        room.id === editingRoom.id ? { ...room, ...values } : room
+        room.id === editingRoom.id ? { ...room, ...values, currentOccupancy: room.currentOccupancy } : room // Preserve currentOccupancy on edit
       );
       setStoredData('pgRooms', updatedRooms);
-      fetchRoomsAndOccupancy();
+      fetchRoomsAndOccupancy(); // Re-fetch to ensure occupancy is up-to-date from resident list
       setIsFormOpen(false);
       setEditingRoom(undefined);
       toast({ title: "Room Updated", description: `Room ${values.roomNumber} has been successfully updated.`, variant: "default" });
@@ -105,10 +117,11 @@ export default function RoomsPage() {
     if (!roomToDelete) return;
     try {
       const residents = getStoredData<Resident>('pgResidents');
-      const roomHasResidents = residents.some(resident => resident.roomId === roomToDelete);
+      // Check if any resident (active or upcoming) is assigned to this room
+      const roomHasResidents = residents.some(resident => resident.roomId === roomToDelete && (resident.status === 'active' || resident.status === 'upcoming'));
 
       if (roomHasResidents) {
-        toast({ title: "Deletion Forbidden", description: "Cannot delete room. It is currently occupied by residents.", variant: "destructive" });
+        toast({ title: "Deletion Forbidden", description: "Cannot delete room. It is currently occupied or reserved by residents.", variant: "destructive" });
         setIsDeleteDialogOpen(false);
         setRoomToDelete(null);
         return;
@@ -154,7 +167,7 @@ export default function RoomsPage() {
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the room.
-              Make sure the room is not occupied before deleting.
+              Make sure the room is not occupied or reserved before deleting.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

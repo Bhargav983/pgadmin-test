@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 export const RoomSchema = z.object({
@@ -6,11 +7,14 @@ export const RoomSchema = z.object({
   rent: z.coerce.number().min(0, { message: "Rent must be a positive number." }),
 });
 
+export const ResidentStatusSchema = z.enum(['active', 'upcoming']);
+
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
   contact: z.string().min(1, { message: "Contact information is required." }),
   personalInfo: z.string().optional(),
   roomId: z.string().nullable().refine(val => val !== '', { message: "Room assignment is required."}),
+  status: ResidentStatusSchema,
   // payments array is managed internally, not part of this form schema
 });
 

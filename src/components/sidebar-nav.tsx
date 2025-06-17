@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -6,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BedDouble, Users, Cog, BadgeDollarSign } from "lucide-react";
+import { LayoutDashboard, BedDouble, Users, Cog, BadgeDollarSign, UserPlus } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -17,7 +18,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/rooms", label: "Rooms", icon: BedDouble },
-  { href: "/dashboard/residents", label: "Residents", icon: Users },
+  { href: "/dashboard/residents", label: "Active Residents", icon: Users },
+  { href: "/dashboard/prospective", label: "Prospective", icon: UserPlus },
   { href: "/dashboard/billing", label: "Billing", icon: BadgeDollarSign },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];

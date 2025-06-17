@@ -8,7 +8,7 @@ import { getResidentColumns } from "./resident-columns";
 import { ResidentForm } from "./resident-form";
 import { PaymentForm } from "@/components/payment-form";
 import { ReceiptDialog } from "@/components/receipt-dialog";
-import { TransferRoomDialog } from "./transfer-room-dialog"; // New Import
+import { TransferRoomDialog } from "./transfer-room-dialog";
 import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData } from "@/lib/types";
 import { PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -23,7 +23,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// Helper to get data from localStorage
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(key);
@@ -35,14 +34,14 @@ const getStoredData = <T,>(key: string): T[] => {
   }
 };
 
-// Helper to set data to localStorage
 const setStoredData = <T,>(key: string, data: T[]): void => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(key, JSON.stringify(data));
 };
 
 export default function ResidentsPage() {
-  const [residents, setResidents] = useState<Resident[]>([]);
+  const [activeResidents, setActiveResidents] = useState<Resident[]>([]);
+  const [allResidents, setAllResidents] = useState<Resident[]>([]); // To calculate occupancy correctly
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingResident, setEditingResident] = useState<Resident | undefined>(undefined);
@@ -70,24 +69,31 @@ export default function ResidentsPage() {
 
     storedResidents = storedResidents.map(res => ({
       ...res,
+      status: res.status || 'active', // Default to active if status is missing
       payments: Array.isArray(res.payments) ? res.payments.map(p => ({...p, receiptId: p.receiptId || '' })) : []
     }));
+    setAllResidents(storedResidents);
+    setActiveResidents(storedResidents.filter(res => res.status === 'active'));
+
 
     const roomsWithOccupancy = storedRooms.map(room => ({
       ...room,
-      currentOccupancy: storedResidents.filter(resident => resident.roomId === room.id).length
+      currentOccupancy: storedResidents.filter(resident => resident.roomId === room.id && (resident.status === 'active' || resident.status === 'upcoming')).length
     }));
     
-    setResidents(storedResidents);
     setRooms(roomsWithOccupancy);
+
     if (typeof window !== 'undefined') {
       setStoredData('pgRooms', roomsWithOccupancy); 
-      setStoredData('pgResidents', storedResidents);
     }
   }, []);
 
   useEffect(() => {
     fetchData();
+     // Listen to storage changes to keep data in sync across tabs/components if needed
+    const handleStorageChange = () => fetchData();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchData]);
 
   const handleAddResident = async (values: ResidentFormValues) => {
@@ -95,13 +101,14 @@ export default function ResidentsPage() {
       const newResident: Resident = { 
         ...values, 
         id: crypto.randomUUID(),
-        payments: [] 
+        payments: [],
+        roomId: values.roomId === "null" ? null : values.roomId // Handle 'Unassigned'
       };
-      const updatedResidents = [...residents, newResident];
+      const updatedResidents = [...allResidents, newResident];
       setStoredData('pgResidents', updatedResidents);
       fetchData(); 
       setIsFormOpen(false);
-      toast({ title: "Resident Added", description: `${newResident.name} has been successfully added.`, variant: "default" });
+      toast({ title: "Resident Added", description: `${newResident.name} has been successfully added as ${newResident.status}.`, variant: "default" });
     } catch (error) {
        toast({ title: "Error", description: "Failed to add resident.", variant: "destructive" });
     }
@@ -110,8 +117,8 @@ export default function ResidentsPage() {
   const handleEditResident = async (values: ResidentFormValues) => {
     if (!editingResident) return;
     try {
-      const updatedResidents = residents.map((res) =>
-        res.id === editingResident.id ? { ...res, ...values, payments: res.payments || [] } : res
+      const updatedResidents = allResidents.map((res) =>
+        res.id === editingResident.id ? { ...res, ...values, roomId: values.roomId === "null" ? null : values.roomId, payments: res.payments || [] } : res
       );
       setStoredData('pgResidents', updatedResidents);
       fetchData(); 
@@ -136,7 +143,7 @@ export default function ResidentsPage() {
   const executeDeleteResident = () => {
     if (!residentToDelete) return;
     try {
-      const updatedResidents = residents.filter((res) => res.id !== residentToDelete);
+      const updatedResidents = allResidents.filter((res) => res.id !== residentToDelete);
       setStoredData('pgResidents', updatedResidents);
       fetchData(); 
       toast({ title: "Resident Deleted", description: "Resident has been successfully deleted.", variant: "default" });
@@ -172,7 +179,7 @@ export default function ResidentsPage() {
       ...paymentInput,
     };
 
-    const updatedResidents = residents.map(res => {
+    const updatedResidents = allResidents.map(res => {
       if (res.id === selectedResidentForPayment.id) {
         return {
           ...res,
@@ -204,20 +211,22 @@ export default function ResidentsPage() {
   };
 
   const handleTransferResidentSubmit = (newRoomId: string) => {
-    if (!residentToTransfer || !newRoomId) {
+    if (!residentToTransfer) {
       toast({ title: "Error", description: "Invalid transfer details.", variant: "destructive" });
       return;
     }
-    if (residentToTransfer.roomId === newRoomId) {
-       toast({ title: "Info", description: "Resident is already in the selected room.", variant: "default" });
+    const targetRoomId = newRoomId === "null" ? null : newRoomId;
+
+    if (residentToTransfer.roomId === targetRoomId) {
+       toast({ title: "Info", description: "Resident is already in the selected room or assignment state.", variant: "default" });
        setIsTransferDialogOpen(false);
        setResidentToTransfer(null);
        return;
     }
 
     try {
-      const updatedResidents = residents.map(res => 
-        res.id === residentToTransfer.id ? { ...res, roomId: newRoomId } : res
+      const updatedResidents = allResidents.map(res => 
+        res.id === residentToTransfer.id ? { ...res, roomId: targetRoomId } : res
       );
       setStoredData('pgResidents', updatedResidents);
       fetchData();
@@ -238,8 +247,8 @@ export default function ResidentsPage() {
   const executeVacateResident = () => {
     if (!residentToVacate) return;
     try {
-      const updatedResidents = residents.map(res => 
-        res.id === residentToVacate.id ? { ...res, roomId: null } : res
+      const updatedResidents = allResidents.map(res => 
+        res.id === residentToVacate.id ? { ...res, roomId: null } : res // Set roomId to null to vacate
       );
       setStoredData('pgResidents', updatedResidents);
       fetchData();
@@ -258,8 +267,8 @@ export default function ResidentsPage() {
     openEditForm, 
     handleDeleteConfirmation, 
     openPaymentForm,
-    handleOpenTransferDialog, // New
-    handleOpenVacateDialog    // New
+    handleOpenTransferDialog, 
+    handleOpenVacateDialog    
   );
   
   const currentRoomForPayment = selectedResidentForPayment ? rooms.find(r => r.id === selectedResidentForPayment.roomId) : null;
@@ -268,13 +277,13 @@ export default function ResidentsPage() {
   return (
     <div className="container mx-auto py-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-headline font-semibold">Manage Residents</h1>
+        <h1 className="text-3xl font-headline font-semibold">Manage Active Residents</h1>
         <Button onClick={() => { setEditingResident(undefined); setIsFormOpen(true); }} className="bg-accent text-accent-foreground hover:bg-accent/90">
           <PlusCircle className="mr-2 h-5 w-5" /> Add New Resident
         </Button>
       </div>
 
-      <DataTable columns={columns} data={residents} filterColumn="name" filterInputPlaceholder="Filter by name..." />
+      <DataTable columns={columns} data={activeResidents} filterColumn="name" filterInputPlaceholder="Filter by name..." />
 
       <ResidentForm
         isOpen={isFormOpen}
@@ -310,7 +319,7 @@ export default function ResidentsPage() {
           onSubmit={handleTransferResidentSubmit}
           residentName={residentToTransfer.name}
           currentRoomId={residentToTransfer.roomId}
-          availableRooms={rooms.filter(room => room.id !== residentToTransfer.roomId)} // Pass rooms excluding current
+          availableRooms={rooms.filter(room => room.id !== residentToTransfer.roomId)} 
         />
       )}
 
@@ -319,7 +328,7 @@ export default function ResidentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this resident?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the resident's record, including all payment history.
+              This action cannot be undone. This will permanently delete the resident's record, including all payment history. This will delete the resident irrespective of their status (Active/Upcoming).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

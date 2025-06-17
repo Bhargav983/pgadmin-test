@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ResidentSchema } from "@/lib/schemas";
-import type { Resident, ResidentFormValues, Room } from "@/lib/types";
+import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/types";
 
 interface ResidentFormProps {
   isOpen: boolean;
@@ -43,6 +43,11 @@ interface ResidentFormProps {
   availableRooms: Room[];
 }
 
+const residentStatuses: { value: ResidentStatus; label: string }[] = [
+  { value: "upcoming", label: "Upcoming" },
+  { value: "active", label: "Active" },
+];
+
 export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditing, availableRooms }: ResidentFormProps) {
   const form = useForm<ResidentFormValues>({
     resolver: zodResolver(ResidentSchema),
@@ -51,33 +56,34 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
       contact: defaultValues?.contact || "",
       personalInfo: defaultValues?.personalInfo || "",
       roomId: defaultValues?.roomId || null,
+      status: defaultValues?.status || "upcoming",
     },
   });
 
   React.useEffect(() => {
-     if (isOpen) { // Reset form only when dialog opens
+     if (isOpen) { 
       if (defaultValues) {
         form.reset({
           name: defaultValues.name || "",
           contact: defaultValues.contact || "",
           personalInfo: defaultValues.personalInfo || "",
           roomId: defaultValues.roomId || null,
+          status: defaultValues.status || (isEditing ? "active" : "upcoming"),
         });
       } else {
-        form.reset({ name: "", contact: "", personalInfo: "", roomId: null });
+        form.reset({ name: "", contact: "", personalInfo: "", roomId: null, status: "upcoming" });
       }
     }
-  }, [defaultValues, form, isOpen]);
+  }, [defaultValues, form, isOpen, isEditing]);
 
 
   const handleFormSubmit = async (values: ResidentFormValues) => {
     await onSubmit(values);
-    // form.reset(); // Resetting here might clear the form before the dialog closes on success
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-headline">{isEditing ? "Edit Resident" : "Add New Resident"}</DialogTitle>
           <DialogDescription>
@@ -118,19 +124,44 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assign Room</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value || undefined} value={field.value || undefined}>
+                  <Select onValueChange={field.onChange} value={field.value || undefined} >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a room" />
+                        <SelectValue placeholder="Select a room (optional for upcoming)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                       <SelectItem value="null">Unassigned</SelectItem>
                       {availableRooms
-                        .filter(room => room.id && room.id.trim() !== "") // Ensure room.id is not empty or just whitespace
+                        .filter(room => room.id && room.id.trim() !== "") 
                         .map((room) => (
                           <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
                             {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
                           </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {residentStatuses.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

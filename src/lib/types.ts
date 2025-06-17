@@ -1,5 +1,7 @@
+
 export type PaymentMode = 'Cash' | 'UPI' | 'Bank Transfer';
 export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
+export type ResidentStatus = 'active' | 'upcoming';
 
 export interface Payment {
   id: string; // Unique ID for the payment transaction
@@ -27,6 +29,7 @@ export interface Resident {
   contact: string;
   personalInfo?: string;
   roomId: string | null; // ID of the room they are assigned to
+  status: ResidentStatus; // 'active' or 'upcoming'
   payments: Payment[];
 }
 

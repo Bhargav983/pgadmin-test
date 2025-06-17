@@ -36,7 +36,9 @@ export default function UpcomingPaymentsPage() {
 
   const fetchUpcomingPayments = useCallback(() => {
     setIsLoading(true);
-    const residents = getStoredData<Resident>('pgResidents').map(r => ({ ...r, payments: r.payments || [] }));
+    const activeResidents = getStoredData<Resident>('pgResidents')
+        .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+        .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
     
     const currentDate = new Date();
@@ -47,7 +49,7 @@ export default function UpcomingPaymentsPage() {
     let upcomingTotal = 0;
     const residentsWithUpcoming: UpcomingPaymentResident[] = [];
 
-    residents.forEach(resident => {
+    activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return;
 
@@ -107,7 +109,7 @@ export default function UpcomingPaymentsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Total Upcoming: <span className="text-blue-500 font-bold">₹{totalUpcomingAmount.toLocaleString()}</span></CardTitle>
-          <CardDescription>Residents with pending (full or partial) payments for {currentDisplayMonth}.</CardDescription>
+          <CardDescription>Active residents with pending (full or partial) payments for {currentDisplayMonth}.</CardDescription>
         </CardHeader>
         <CardContent>
           {upcomingResidents.length > 0 ? (
@@ -134,12 +136,10 @@ export default function UpcomingPaymentsPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-muted-foreground">All payments for {currentDisplayMonth} seem to be settled.</p>
+            <p className="text-muted-foreground">All payments from active residents for {currentDisplayMonth} seem to be settled.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-    

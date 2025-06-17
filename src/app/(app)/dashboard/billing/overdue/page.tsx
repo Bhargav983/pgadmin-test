@@ -35,7 +35,9 @@ export default function OverduePaymentsPage() {
 
   const fetchOverduePayments = useCallback(() => {
     setIsLoading(true);
-    const residents = getStoredData<Resident>('pgResidents').map(r => ({ ...r, payments: r.payments || [] }));
+    const activeResidents = getStoredData<Resident>('pgResidents')
+        .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+        .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
     
     const currentDate = new Date();
@@ -45,7 +47,7 @@ export default function OverduePaymentsPage() {
     let overdueTotal = 0;
     const overdueResidentsList: OverdueResident[] = [];
 
-    residents.forEach(resident => {
+    activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return;
 
@@ -74,7 +76,8 @@ export default function OverduePaymentsPage() {
             firstCheckYear = earliestPayment.year;
             firstCheckMonth = earliestPayment.month;
         } else {
-            firstCheckYear = currentYear;
+            // If no payments, check from start of current year or a sensible default
+            firstCheckYear = currentYear; // Or perhaps resident.joinDate if available
             firstCheckMonth = 1;
         }
       } else {
@@ -84,7 +87,7 @@ export default function OverduePaymentsPage() {
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
         const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth -1;
+        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; // Only up to previous month
         for (let m = monthStart; m <= monthEnd; m++) {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) continue;
            const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
@@ -146,7 +149,7 @@ export default function OverduePaymentsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Total Overdue: <span className="text-destructive font-bold">₹{totalOverdueAmount.toLocaleString()}</span></CardTitle>
-          <CardDescription>Residents with outstanding payments from previous billing periods.</CardDescription>
+          <CardDescription>Active residents with outstanding payments from previous billing periods.</CardDescription>
         </CardHeader>
         <CardContent>
           {overdueResidents.length > 0 ? (
@@ -171,12 +174,10 @@ export default function OverduePaymentsPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-muted-foreground">No residents with overdue payments currently.</p>
+            <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-    

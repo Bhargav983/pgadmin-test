@@ -37,7 +37,9 @@ export default function CollectedPaymentsPage() {
 
   const fetchCollectedPayments = useCallback(() => {
     setIsLoading(true);
-    const residents = getStoredData<Resident>('pgResidents').map(r => ({ ...r, payments: r.payments || [] }));
+    const activeResidents = getStoredData<Resident>('pgResidents')
+        .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+        .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
     
     const currentDate = new Date();
@@ -48,7 +50,7 @@ export default function CollectedPaymentsPage() {
     let currentMonthTotal = 0;
     const paymentsThisMonth: CollectedPayment[] = [];
 
-    residents.forEach(resident => {
+    activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
       resident.payments.forEach(payment => {
         if (payment.month === currentMonth && payment.year === currentYear) {
@@ -102,7 +104,7 @@ export default function CollectedPaymentsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Total Collected: <span className="text-green-500 font-bold">₹{totalCollected.toLocaleString()}</span></CardTitle>
-          <CardDescription>All payments recorded for {currentDisplayMonth}.</CardDescription>
+          <CardDescription>All payments recorded for active residents for {currentDisplayMonth}.</CardDescription>
         </CardHeader>
         <CardContent>
           {collectedPayments.length > 0 ? (
@@ -131,12 +133,10 @@ export default function CollectedPaymentsPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-muted-foreground">No payments collected for {currentDisplayMonth} yet.</p>
+            <p className="text-muted-foreground">No payments collected from active residents for {currentDisplayMonth} yet.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-    
