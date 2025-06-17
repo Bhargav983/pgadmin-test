@@ -70,6 +70,13 @@ export default function PaymentManagementPage() {
 
   const { toast } = useToast();
 
+  // Derived summary states
+  const [totalRentForSelectedPeriod, setTotalRentForSelectedPeriod] = useState(0);
+  const [totalPaidForSelectedPeriod, setTotalPaidForSelectedPeriod] = useState(0);
+  const [totalPreviousBalanceSum, setTotalPreviousBalanceSum] = useState(0);
+  const [overallTotalDue, setOverallTotalDue] = useState(0);
+
+
   const addActivityLogEntry = (
     residentId: string,
     type: ActivityType,
@@ -107,7 +114,7 @@ export default function PaymentManagementPage() {
       activityLog: r.activityLog || [],
     }));
     const activeResidents = storedResidents.filter(r => r.status === 'active');
-    setAllResidents(storedResidents); // Keep all for potential activity logging on payment
+    setAllResidents(storedResidents); 
 
     const storedRooms = getStoredData<Room>('pgRooms');
     setRooms(storedRooms);
@@ -116,7 +123,6 @@ export default function PaymentManagementPage() {
       const room = storedRooms.find(r => r.id === resident.roomId);
       const currentMonthRent = room ? room.rent : 0;
 
-      // Calculate Previous Balance
       let previousBalance = 0;
       if (room && room.rent > 0) {
         for (let y = (resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : filterYear -1) ; y <= filterYear; y++) {
@@ -126,7 +132,6 @@ export default function PaymentManagementPage() {
           for (let m = monthStart; m <= monthEnd; m++) {
             if (y > filterYear || (y === filterYear && m >= filterMonth)) continue;
             
-            // For past months, assume rent was the current room's rent (simplification)
             const rentForPastMonth = room.rent; 
             const paymentsForPastMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
             const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
@@ -159,8 +164,8 @@ export default function PaymentManagementPage() {
         remainingForSelectedMonth: Math.max(0, currentMonthRent - amountPaidSelectedMonth),
         dueDate: `5th ${format(new Date(filterYear, filterMonth - 1), 'MMMM yyyy')}`,
         statusSelectedMonth: statusSelectedMonth,
-        paymentDateForMonth: paymentsSelectedMonth.length > 0 ? format(new Date(paymentsSelectedMonth[0].date), 'dd MMM, yyyy') : undefined,
-        paymentModeForMonth: paymentsSelectedMonth.length > 0 ? paymentsSelectedMonth[0].mode : undefined,
+        paymentDateForMonth: paymentsSelectedMonth.length > 0 ? format(new Date(paymentsSelectedMonth[paymentsSelectedMonth.length - 1].date), 'dd MMM, yyyy') : undefined,
+        paymentModeForMonth: paymentsSelectedMonth.length > 0 ? paymentsSelectedMonth[paymentsSelectedMonth.length -1].mode : undefined,
         resident: resident,
         room: room,
       };
@@ -172,10 +177,22 @@ export default function PaymentManagementPage() {
 
   useEffect(() => {
     fetchDataAndProcess();
-    const handleStorageChange = () => fetchDataAndProcess(); // Re-fetch and process on any storage change
+    const handleStorageChange = () => fetchDataAndProcess();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchDataAndProcess]);
+
+  useEffect(() => {
+    // Calculate summary totals whenever processedPayments changes
+    const rentSum = processedPayments.reduce((acc, curr) => acc + curr.currentMonthRent, 0);
+    const paidSum = processedPayments.reduce((acc, curr) => acc + curr.amountPaidSelectedMonth, 0);
+    const prevBalSum = processedPayments.reduce((acc, curr) => acc + curr.previousBalance, 0);
+    
+    setTotalRentForSelectedPeriod(rentSum);
+    setTotalPaidForSelectedPeriod(paidSum);
+    setTotalPreviousBalanceSum(prevBalSum);
+    setOverallTotalDue(rentSum + prevBalSum);
+  }, [processedPayments]);
 
   const handleOpenPaymentForm = (data: ProcessedPaymentEntry) => {
     setSelectedResidentForPayment(data.resident);
@@ -201,17 +218,16 @@ export default function PaymentManagementPage() {
        ...paymentInput,
     };
     
-    // Update the specific resident in the main 'allResidents' state
     const updatedAllResidents = allResidents.map(res => 
       res.id === selectedResidentForPayment.id ? { ...res, payments: [...(res.payments || []), newPayment] } : res
     );
     setStoredData('pgResidents', updatedAllResidents); 
-    setAllResidents(updatedAllResidents); // Update local state of all residents
+    setAllResidents(updatedAllResidents); 
     
     const paymentDescription = `Payment of ₹${newPayment.amount.toLocaleString()} via ${newPayment.mode} for ${format(new Date(newPayment.year, newPayment.month - 1), 'MMMM yyyy')} recorded. Room: ${roomForPayment.roomNumber}.`;
     await addActivityLogEntry(selectedResidentForPayment.id, 'PAYMENT_RECORDED', paymentDescription, { paymentId: newPayment.id, amount: newPayment.amount, roomNumber: roomForPayment.roomNumber });
     
-    fetchDataAndProcess(); // Re-fetch and re-process data for the table
+    fetchDataAndProcess(); 
     setIsPaymentFormOpen(false);
     setCurrentReceiptData({ payment: newPayment, residentName: selectedResidentForPayment.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
     setIsReceiptDialogOpen(true);
@@ -222,11 +238,7 @@ export default function PaymentManagementPage() {
 
   const columns = getPaymentManagementColumns(handleOpenPaymentForm);
   
-  const totalRentForSelectedPeriod = processedPayments.reduce((acc, curr) => acc + curr.currentMonthRent, 0);
-  const totalPaidForSelectedPeriod = processedPayments.reduce((acc, curr) => acc + curr.amountPaidSelectedMonth, 0);
-  const totalPreviousBalanceSum = processedPayments.reduce((acc, curr) => acc + curr.previousBalance, 0);
-  const overallTotalDue = totalRentForSelectedPeriod + totalPreviousBalanceSum;
-
+  const selectedPeriodFormatted = format(new Date(filterYear, filterMonth - 1), 'MMM yyyy');
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -236,7 +248,7 @@ export default function PaymentManagementPage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="font-headline">Filters & Summary</CardTitle>
+          <CardTitle className="font-headline">Filters & Summary for {selectedPeriodFormatted}</CardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 items-end">
             <div>
               <label htmlFor="month-filter" className="text-sm font-medium">Month</label>
@@ -261,11 +273,11 @@ export default function PaymentManagementPage() {
               </Select>
             </div>
             <div className="p-4 bg-secondary rounded-md">
-                <p className="text-xs text-muted-foreground">Rent for {format(new Date(filterYear, filterMonth - 1), 'MMM yyyy')}</p>
+                <p className="text-xs text-muted-foreground">Rent for {selectedPeriodFormatted}</p>
                 <p className="text-lg font-bold">₹{totalRentForSelectedPeriod.toLocaleString()}</p>
             </div>
              <div className="p-4 bg-secondary rounded-md">
-                <p className="text-xs text-muted-foreground">Paid for {format(new Date(filterYear, filterMonth - 1), 'MMM yyyy')}</p>
+                <p className="text-xs text-muted-foreground">Paid for {selectedPeriodFormatted}</p>
                 <p className="text-lg font-bold text-green-600">₹{totalPaidForSelectedPeriod.toLocaleString()}</p>
             </div>
             <div className="p-4 bg-secondary rounded-md">
@@ -307,3 +319,4 @@ export default function PaymentManagementPage() {
   );
 }
 
+    
