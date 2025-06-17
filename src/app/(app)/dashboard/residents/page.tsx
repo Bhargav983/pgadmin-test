@@ -9,7 +9,7 @@ import { ResidentForm } from "./resident-form";
 import { PaymentForm } from "@/components/payment-form";
 import { ReceiptDialog } from "@/components/receipt-dialog";
 import { TransferRoomDialog } from "./transfer-room-dialog";
-import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData } from "@/lib/types";
+import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData, ResidentStatus } from "@/lib/types";
 import { PlusCircle, UserCheck, UserX, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -71,6 +71,8 @@ export default function ResidentsPage() {
   const [isReactivateConfirmOpen, setIsReactivateConfirmOpen] = useState(false);
   const [residentToReactivate, setResidentToReactivate] = useState<Resident | null>(null);
 
+  const [isAssigningRoomForActivation, setIsAssigningRoomForActivation] = useState(false);
+
 
   const { toast } = useToast();
 
@@ -110,6 +112,8 @@ export default function ResidentsPage() {
   const handleFormSubmit = async (values: ResidentFormValues) => {
     try {
       let updatedResidents;
+      let residentIdForActivationCheck = editingResident?.id;
+
       if (editingResident) { // Edit existing
         updatedResidents = allResidents.map((res) =>
           res.id === editingResident.id ? { ...res, ...values, roomId: values.roomId === "null" ? null : values.roomId, payments: res.payments || [] } : res
@@ -121,15 +125,40 @@ export default function ResidentsPage() {
           id: crypto.randomUUID(),
           payments: [],
           roomId: values.roomId === "null" ? null : values.roomId,
-          status: values.status || 'upcoming', // Ensure new residents are upcoming
+          status: values.status || 'upcoming', 
         };
+        residentIdForActivationCheck = newResident.id;
         updatedResidents = [...allResidents, newResident];
         toast({ title: "Resident Added", description: `${newResident.name} has been added as ${newResident.status}.`, variant: "default" });
       }
       setStoredData('pgResidents', updatedResidents);
-      fetchData(); 
+      // fetchData(); // Fetch data after initial save
+
+      if (isAssigningRoomForActivation && residentIdForActivationCheck) {
+        const residentJustSaved = updatedResidents.find(res => res.id === residentIdForActivationCheck);
+        if (residentJustSaved && values.roomId) { // Check values.roomId as it's the submitted form value
+            const finalUpdatedResidents = updatedResidents.map(res => 
+                res.id === residentJustSaved.id ? { ...res, status: 'active' as ResidentStatus } : res
+            );
+            setStoredData('pgResidents', finalUpdatedResidents);
+            fetchData();
+            toast({ title: "Resident Activated", description: `${residentJustSaved.name} assigned a room and is now active.` });
+            setIsFormOpen(false);
+            setEditingResident(undefined);
+            setIsAssigningRoomForActivation(false);
+            return; 
+        } else if (residentJustSaved && !values.roomId) {
+            toast({ title: "Activation Pending", description: "Please assign a room to activate this resident.", variant: "destructive" });
+            // Keep form open, don't reset editingResident or isAssigningRoomForActivation
+            fetchData(); // fetch to reflect any non-room changes that were saved
+            return; 
+        }
+      }
+      
+      fetchData(); // Ensure UI is updated if not handled by activation flow
       setIsFormOpen(false);
       setEditingResident(undefined);
+      setIsAssigningRoomForActivation(false); // Reset if not in activation flow or if activation failed to proceed
     } catch (error) {
        toast({ title: "Error", description: "Failed to save resident.", variant: "destructive" });
     }
@@ -234,7 +263,10 @@ export default function ResidentsPage() {
 
   const handleOpenActivateDialog = (resident: Resident) => {
     if (!resident.roomId) {
-      toast({ title: "Activation Failed", description: "Resident must be assigned to a room before activation.", variant: "destructive" });
+      setEditingResident(resident);
+      setIsAssigningRoomForActivation(true);
+      setIsFormOpen(true);
+      toast({ title: "Assign Room to Activate", description: `Please assign a room to ${resident.name} to activate them.`, variant: "default"});
       return;
     }
     setResidentToActivate(resident);
@@ -262,7 +294,7 @@ export default function ResidentsPage() {
     if (!residentToReactivate) return;
     try {
       const updatedResidents = allResidents.map(res => 
-        res.id === residentToReactivate.id ? { ...res, status: 'upcoming', roomId: null } : res // Set to upcoming, clear room
+        res.id === residentToReactivate.id ? { ...res, status: 'upcoming', roomId: null } : res 
       );
       setStoredData('pgResidents', updatedResidents); fetchData();
       toast({ title: "Resident Reactivated", description: `${residentToReactivate.name} is now 'Upcoming'. Assign a room and activate if needed.`, variant: "default"});
@@ -304,9 +336,9 @@ export default function ResidentsPage() {
 
       <ResidentForm
         isOpen={isFormOpen}
-        onClose={() => {setIsFormOpen(false); setEditingResident(undefined);}}
+        onClose={() => {setIsFormOpen(false); setEditingResident(undefined); setIsAssigningRoomForActivation(false);}}
         onSubmit={handleFormSubmit}
-        defaultValues={editingResident} // Pass editingResident which could be new (undefined) or existing
+        defaultValues={editingResident} 
         isEditing={!!editingResident}
         availableRooms={rooms}
       />
@@ -368,3 +400,4 @@ export default function ResidentsPage() {
     </div>
   );
 }
+
