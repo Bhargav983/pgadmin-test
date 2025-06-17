@@ -10,7 +10,7 @@ import { PaymentForm } from "@/components/payment-form";
 import { ReceiptDialog } from "@/components/receipt-dialog";
 import { TransferRoomDialog } from "./transfer-room-dialog";
 import type { Resident, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData, ResidentStatus, ActivityLogEntry, ActivityType } from "@/lib/types";
-import { PlusCircle, UserCheck, UserX, RotateCcw } from "lucide-react";
+import { PlusCircle, UserCheck, UserX, RotateCcw, List, LayoutGrid } from "lucide-react"; // Added List, LayoutGrid
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { Input } from "@/components/ui/input"; // Added Input
+import { ResidentCard } from "@/components/resident-card"; // Added ResidentCard
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -70,6 +72,11 @@ export default function ResidentsPage() {
 
   const [isReactivateConfirmOpen, setIsReactivateConfirmOpen] = useState(false);
   const [residentToReactivate, setResidentToReactivate] = useState<Resident | null>(null);
+
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState('current');
+
 
   const { toast } = useToast();
 
@@ -120,9 +127,15 @@ export default function ResidentsPage() {
       guardianContact: res.guardianContact || null,
     }));
     setAllResidents(storedResidents);
-    setCurrentResidents(storedResidents.filter(res => res.status === 'active'));
-    setUpcomingResidents(storedResidents.filter(res => res.status === 'upcoming'));
-    setFormerResidents(storedResidents.filter(res => res.status === 'former'));
+
+    // Apply search term filter
+    const filteredByName = searchTerm
+      ? storedResidents.filter(res => res.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      : storedResidents;
+    
+    setCurrentResidents(filteredByName.filter(res => res.status === 'active').sort((a,b) => a.name.localeCompare(b.name)));
+    setUpcomingResidents(filteredByName.filter(res => res.status === 'upcoming').sort((a,b) => a.name.localeCompare(b.name)));
+    setFormerResidents(filteredByName.filter(res => res.status === 'former').sort((a,b) => a.name.localeCompare(b.name)));
 
     const roomsWithOccupancy = storedRooms.map(room => ({
       ...room,
@@ -133,7 +146,7 @@ export default function ResidentsPage() {
     if (typeof window !== 'undefined') {
       setStoredData('pgRooms', roomsWithOccupancy); 
     }
-  }, []);
+  }, [searchTerm]); // Add searchTerm to dependencies
 
   useEffect(() => {
     fetchData();
@@ -190,7 +203,6 @@ export default function ResidentsPage() {
       return;
     }
     
-    // Fetch latest version of allResidents to ensure checks are against current data
     const currentAllResidents = getStoredData<Resident>('pgResidents');
     const residentData = currentAllResidents.find(r => r.id === selectedResidentForPayment.id);
 
@@ -216,7 +228,6 @@ export default function ResidentsPage() {
       .reduce((sum, p) => sum + p.amount, 0);
 
     let actualPreviousBalance = 0;
-    // Calculate previous balance based on resident's actual payment history and room assignments
     const residentJoiningYear = residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1;
     const residentJoiningMonth = residentData.joiningDate ? new Date(residentData.joiningDate).getMonth() + 1 : 1;
 
@@ -225,9 +236,7 @@ export default function ResidentsPage() {
       const monthEnd = (y < targetYear) ? 12 : targetMonth - 1;
 
       for (let m = monthStart; m <= monthEnd; m++) {
-        // Find if resident was in a room during this past month
-        // This is a simplified check; a more robust system would track room history
-        const pastRoomId = residentData.roomId; // Assuming current room was the room for past periods for simplicity
+        const pastRoomId = residentData.roomId; 
         const pastRoom = localRooms.find(r => r.id === pastRoomId);
         if (!pastRoom || pastRoom.rent <= 0) continue;
 
@@ -263,12 +272,12 @@ export default function ResidentsPage() {
     const updatedResidentsWithPayment = currentAllResidents.map(res => 
       res.id === selectedResidentForPayment.id ? { ...res, payments: [...(res.payments || []), newPayment] } : res
     );
-    setStoredData('pgResidents', updatedResidentsWithPayment); // Save before logging
+    setStoredData('pgResidents', updatedResidentsWithPayment); 
     
     const paymentDescription = `Payment of ₹${newPayment.amount.toLocaleString()} via ${newPayment.mode} for ${format(new Date(newPayment.year, newPayment.month - 1), 'MMMM yyyy')} recorded. Room: ${roomForPayment.roomNumber}.`;
     await addActivityLogEntry(selectedResidentForPayment.id, 'PAYMENT_RECORDED', paymentDescription, { paymentId: newPayment.id, amount: newPayment.amount, roomNumber: roomForPayment.roomNumber });
     
-    fetchData(); // This will re-read from localStorage and update allResidents state
+    fetchData(); 
 
     setIsPaymentFormOpen(false);
     setCurrentReceiptData({ payment: newPayment, residentName: selectedResidentForPayment.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
@@ -308,7 +317,7 @@ export default function ResidentsPage() {
       const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToTransfer.id ? { ...res, roomId: targetRoomId } : res
       );
-      setStoredData('pgResidents', updatedResidents); // Save before logging
+      setStoredData('pgResidents', updatedResidents); 
       await addActivityLogEntry(residentToTransfer.id, 'ROOM_TRANSFERRED', `Transferred from room ${fromRoomNumber} to room ${toRoomNumber}.`, { fromRoomId: residentToTransfer.roomId, toRoomId: targetRoomId, fromRoomNumber, toRoomNumber });
       fetchData();
       toast({ title: "Resident Transferred", description: `${residentToTransfer.name} has been transferred to room ${toRoomNumber}.`, variant: "default"});
@@ -331,7 +340,7 @@ export default function ResidentsPage() {
       const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToVacate.id ? { ...res, status: 'former' as ResidentStatus, roomId: null } : res
       );
-      setStoredData('pgResidents', updatedResidents); // Save before logging
+      setStoredData('pgResidents', updatedResidents); 
       await addActivityLogEntry(residentToVacate.id, 'VACATED', `${residentToVacate.name} vacated from room ${vacatedFromRoomNumber}. Status changed to Former.`, { vacatedFromRoomId: residentToVacate.roomId, vacatedFromRoomNumber });
       fetchData();
       toast({ title: "Resident Vacated", description: `${residentToVacate.name} has been set to 'Former' and unassigned from room.`, variant: "default"});
@@ -359,7 +368,7 @@ export default function ResidentsPage() {
       const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToActivate.id ? { ...res, status: 'active' as ResidentStatus } : res
       );
-      setStoredData('pgResidents', updatedResidents); // Save before logging
+      setStoredData('pgResidents', updatedResidents); 
       await addActivityLogEntry(residentToActivate.id, 'ACTIVATED', `${residentToActivate.name} activated. Current room: ${roomNumber}.`, { roomId: residentToActivate.roomId, roomNumber });
       fetchData();
       toast({ title: "Resident Activated", description: `${residentToActivate.name} is now active in room ${roomNumber}.`, variant: "default"});
@@ -379,7 +388,7 @@ export default function ResidentsPage() {
       const updatedResidents = currentAllResidents.map(res => 
         res.id === residentToReactivate.id ? { ...res, status: 'upcoming' as ResidentStatus, roomId: null } : res 
       );
-      setStoredData('pgResidents', updatedResidents); // Save before logging
+      setStoredData('pgResidents', updatedResidents); 
       await addActivityLogEntry(residentToReactivate.id, 'REACTIVATED', `${residentToReactivate.name} reactivated. Status changed to Upcoming and unassigned from any room.`);
       fetchData();
       toast({ title: "Resident Reactivated", description: `${residentToReactivate.name} is now 'Upcoming'. Assign a room and activate if needed.`, variant: "default"});
@@ -393,31 +402,72 @@ export default function ResidentsPage() {
   
   const currentRoomForPayment = selectedResidentForPayment ? rooms.find(r => r.id === selectedResidentForPayment.roomId) : null;
 
+  const displayedResidents = activeTab === 'current' ? currentResidents : activeTab === 'upcoming' ? upcomingResidents : formerResidents;
+
   return (
-    <div className="container mx-auto py-4">
-      <div className="flex items-center justify-between mb-6">
+    <div className="container mx-auto py-4 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-headline font-semibold">Manage Residents</h1>
-        <Button onClick={() => router.push('/dashboard/residents/add')} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <PlusCircle className="mr-2 h-5 w-5" /> Add New Resident
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Input 
+            placeholder="Search residents by name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-xs w-full sm:w-auto"
+          />
+          <Button variant={viewMode === 'table' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('table')} aria-label="Table View">
+            <List className="h-5 w-5" />
+          </Button>
+          <Button variant={viewMode === 'card' ? 'secondary' : 'outline'} size="icon" onClick={() => setViewMode('card')} aria-label="Card View">
+            <LayoutGrid className="h-5 w-5" />
+          </Button>
+          <Button onClick={() => router.push('/dashboard/residents/add')} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <PlusCircle className="mr-2 h-5 w-5" /> Add New Resident
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="current" className="w-full">
+      <Tabs defaultValue="current" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="current">Current ({currentResidents.length})</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming ({upcomingResidents.length})</TabsTrigger>
           <TabsTrigger value="former">Former ({formerResidents.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="current">
-          <DataTable columns={activeColumns} data={currentResidents} filterColumn="name" filterInputPlaceholder="Filter current residents..." />
+          {viewMode === 'table' ? (
+            <DataTable columns={activeColumns} data={currentResidents} />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+              {currentResidents.map(res => <ResidentCard key={res.id} resident={res} rooms={rooms} onEdit={handleNavigateToEdit} onDelete={handleDeleteConfirmation} onRecordPayment={openPaymentForm} onTransfer={handleOpenTransferDialog} onVacate={handleOpenVacateDialog}/>)}
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="upcoming">
-          <DataTable columns={upcomingColumns} data={upcomingResidents} filterColumn="name" filterInputPlaceholder="Filter upcoming residents..." />
+           {viewMode === 'table' ? (
+            <DataTable columns={upcomingColumns} data={upcomingResidents} />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+              {upcomingResidents.map(res => <ResidentCard key={res.id} resident={res} rooms={rooms} onEdit={handleNavigateToEdit} onDelete={handleDeleteConfirmation} onActivate={handleOpenActivateDialog} />)}
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="former">
-          <DataTable columns={formerColumns} data={formerResidents} filterColumn="name" filterInputPlaceholder="Filter former residents..." />
+           {viewMode === 'table' ? (
+            <DataTable columns={formerColumns} data={formerResidents} />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+              {formerResidents.map(res => <ResidentCard key={res.id} resident={res} rooms={rooms} onEdit={handleNavigateToEdit} onDelete={handleDeleteConfirmation} onReactivate={handleOpenReactivateDialog} />)}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
+      
+      {displayedResidents.length === 0 && (
+        <div className="text-center py-10 text-muted-foreground bg-card border rounded-md mt-4">
+            No residents found for "{activeTab}" status {searchTerm && `matching "${searchTerm}"`}.
+        </div>
+      )}
+
 
       {selectedResidentForPayment && currentRoomForPayment && (
         <PaymentForm isOpen={isPaymentFormOpen} onClose={() => { setIsPaymentFormOpen(false); setSelectedResidentForPayment(null); }}
@@ -476,3 +526,4 @@ export default function ResidentsPage() {
     </div>
   );
 }
+

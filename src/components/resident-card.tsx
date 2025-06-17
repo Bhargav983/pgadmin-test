@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, CreditCard, Repeat, UserX, UserCheck, RotateCcw, Eye, Phone, BedDouble, CalendarDays, UploadCloud } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, CreditCard, Repeat, UserX, UserCheck, RotateCcw, Eye, Phone, BedDouble, CalendarDays, UploadCloud, User as UserIcon } from "lucide-react";
 import Image from "next/image";
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -43,27 +43,27 @@ export function ResidentCard({
   switch (resident.status) {
     case 'active':
       statusBadgeVariant = "default";
-      statusBadgeClass = "bg-green-500 text-white";
+      statusBadgeClass = "bg-green-500 text-white hover:bg-green-600";
       break;
     case 'upcoming':
       statusBadgeVariant = "secondary";
-      statusBadgeClass = "bg-blue-500 text-white";
+      statusBadgeClass = "bg-blue-500 text-white hover:bg-blue-600";
       break;
     case 'former':
-      statusBadgeVariant = "destructive";
-      statusBadgeClass = "bg-slate-500 text-white";
+      statusBadgeVariant = "destructive"; // Using destructive for former status
+      statusBadgeClass = "bg-slate-500 text-white hover:bg-slate-600";
       break;
   }
 
   return (
-    <Card className="flex flex-col justify-between shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden">
-      <CardHeader className="pb-2 bg-muted/30">
+    <Card className="flex flex-col justify-between shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden bg-card">
+      <CardHeader className="pb-2 bg-card">
         <div className="flex justify-between items-start">
           {resident.photoUrl ? (
-            <Image src={resident.photoUrl} alt={resident.name} width={64} height={64} className="rounded-full border-2 border-primary object-cover" data-ai-hint="person avatar" />
+            <Image src={resident.photoUrl} alt={resident.name} width={64} height={64} className="rounded-full border-2 border-primary object-cover aspect-square" data-ai-hint="person avatar" />
           ) : (
-            <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center text-muted-foreground border-2 border-primary">
-              <User className="h-8 w-8" />
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground border-2 border-primary">
+              <UserIcon className="h-8 w-8" />
             </div>
           )}
           <DropdownMenu>
@@ -75,24 +75,24 @@ export function ResidentCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(resident.id)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full cursor-pointer"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(resident.id)} className="cursor-pointer"><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
               
               {resident.status === 'active' && onRecordPayment && 
-                <DropdownMenuItem onClick={() => onRecordPayment(resident)} disabled={!resident.roomId}><CreditCard className="mr-2 h-4 w-4" /> Record Payment</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => onRecordPayment(resident)} disabled={!resident.roomId} className="cursor-pointer"><CreditCard className="mr-2 h-4 w-4" /> Record Payment</DropdownMenuItem>}
               {resident.status === 'active' && onTransfer && 
-                <DropdownMenuItem onClick={() => onTransfer(resident)} disabled={!resident.roomId}><Repeat className="mr-2 h-4 w-4" /> Transfer Room</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => onTransfer(resident)} disabled={!resident.roomId} className="cursor-pointer"><Repeat className="mr-2 h-4 w-4" /> Transfer Room</DropdownMenuItem>}
               {resident.status === 'active' && onVacate &&
-                <DropdownMenuItem onClick={() => onVacate(resident)} disabled={!resident.roomId} className="text-orange-600 focus:text-orange-700 focus:bg-orange-100"><UserX className="mr-2 h-4 w-4" /> Vacate Resident</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => onVacate(resident)} disabled={!resident.roomId} className="text-orange-600 focus:text-orange-700 focus:bg-orange-100 cursor-pointer"><UserX className="mr-2 h-4 w-4" /> Vacate Resident</DropdownMenuItem>}
               
               {resident.status === 'upcoming' && onActivate &&
-                <DropdownMenuItem onClick={() => onActivate(resident)} className="text-green-600 focus:text-green-700 focus:bg-green-100"><UserCheck className="mr-2 h-4 w-4" /> Activate Resident</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => onActivate(resident)} className="text-green-600 focus:text-green-700 focus:bg-green-100 cursor-pointer"><UserCheck className="mr-2 h-4 w-4" /> Activate Resident</DropdownMenuItem>}
 
               {resident.status === 'former' && onReactivate &&
-                <DropdownMenuItem onClick={() => onReactivate(resident)} className="text-blue-600 focus:text-blue-700 focus:bg-blue-100"><RotateCcw className="mr-2 h-4 w-4" /> Reactivate</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => onReactivate(resident)} className="text-blue-600 focus:text-blue-700 focus:bg-blue-100 cursor-pointer"><RotateCcw className="mr-2 h-4 w-4" /> Reactivate</DropdownMenuItem>}
               
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Record</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive cursor-pointer"><Trash2 className="mr-2 h-4 w-4" /> Delete Record</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -114,7 +114,7 @@ export function ResidentCard({
          {resident.idProofUrl ? (
             <div className="flex items-center pt-1">
                  <Image src={resident.idProofUrl} alt="ID Preview" width={48} height={32} className="rounded border object-contain mr-2" data-ai-hint="document id" />
-                 <span className="text-xs">ID Proof Attached</span>
+                 <span className="text-xs text-foreground">ID Proof Attached</span>
             </div>
         ) : (
             <div className="flex items-center pt-1 text-muted-foreground/70">
@@ -124,8 +124,9 @@ export function ResidentCard({
         )}
       </CardContent>
        {/* <CardFooter className="pt-2 pb-3">
-         Optional footer actions
+         Optional footer actions like a direct "View Full Profile" button if needed
       </CardFooter> */}
     </Card>
   );
 }
+
