@@ -4,11 +4,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
-import type { Resident, Room, Payment } from "@/lib/types";
+import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck } from "lucide-react";
+import type { Resident, Room, Payment, AttendanceRecord, AttendanceStatus } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -21,42 +21,65 @@ const getStoredData = <T,>(key: string): T[] => {
   }
 };
 
-interface PaymentOverview {
-  upcoming: number;
-  overdue: number;
-  collectedThisMonth: number;
+interface ReportSummaries {
+  // Payment related
+  upcomingPaymentsAmount: number;
+  overduePaymentsAmount: number;
+  collectedThisMonthAmount: number;
   recentPayments: (Payment & { residentName: string; roomNumber: string })[];
   overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[];
+  // Attendance related
+  presentToday: number;
+  lateToday: number;
+  absentToday: number;
+  onLeaveToday: number;
+  pendingToday: number;
+  // Occupancy related
+  totalActiveResidents: number;
+  totalCapacity: number;
+  occupiedBeds: number;
+  vacantBeds: number;
 }
 
 const pageLoadDate = new Date();
 const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function BillingPage() {
-  const [paymentOverview, setPaymentOverview] = useState<PaymentOverview>({
-    upcoming: 0,
-    overdue: 0,
-    collectedThisMonth: 0,
+  const [reportSummaries, setReportSummaries] = useState<ReportSummaries>({
+    upcomingPaymentsAmount: 0,
+    overduePaymentsAmount: 0,
+    collectedThisMonthAmount: 0,
     recentPayments: [],
     overdueResidents: [],
+    presentToday: 0,
+    lateToday: 0,
+    absentToday: 0,
+    onLeaveToday: 0,
+    pendingToday: 0,
+    totalActiveResidents: 0,
+    totalCapacity: 0,
+    occupiedBeds: 0,
+    vacantBeds: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
 
 
-  const calculatePaymentOverview = useCallback(() => {
+  const calculateReportSummaries = useCallback(() => {
     setIsLoading(true);
-    // Filter for active residents only for billing calculations
     const activeResidents = getStoredData<Resident>('pgResidents')
       .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
       .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
+    const allAttendanceRecords = getStoredData<AttendanceRecord>('pgAttendanceRecords');
 
     const currentDate = new Date(); 
     setCurrentDisplayDate(currentDate); 
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
+    const todayFormatted = format(startOfDay(currentDate), 'yyyy-MM-dd');
 
+    // --- Payment Calculations ---
     let upcomingTotal = 0;
     let overdueTotal = 0;
     let collectedThisMonthTotal = 0;
@@ -65,7 +88,7 @@ export default function BillingPage() {
 
     activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
-      if (!room || room.rent <= 0) return;
+      if (!room || room.rent <= 0) return; // Skip if no room or no rent for payment calcs
 
       resident.payments.forEach(p => {
         allPayments.push({ ...p, residentName: resident.name, roomNumber: room.roomNumber });
@@ -149,25 +172,59 @@ export default function BillingPage() {
         });
       }
     });
-
     allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    setPaymentOverview({
-      upcoming: upcomingTotal,
-      overdue: overdueTotal,
-      collectedThisMonth: collectedThisMonthTotal,
+    // --- Attendance Calculations ---
+    let presentToday = 0, lateToday = 0, absentToday = 0, onLeaveToday = 0, pendingToday = 0;
+    const attendanceForToday = allAttendanceRecords.filter(ar => ar.date === todayFormatted);
+    
+    // Create a set of resident IDs who have an explicit record for today
+    const residentsWithTodaysRecord = new Set(attendanceForToday.map(ar => ar.residentId));
+
+    attendanceForToday.forEach(ar => {
+      if (!activeResidents.find(res => res.id === ar.residentId)) return; // Only count active residents
+      switch(ar.status) {
+        case 'Present': presentToday++; break;
+        case 'Late': lateToday++; break;
+        case 'Absent': absentToday++; break;
+        case 'On Leave': onLeaveToday++; break;
+        default: pendingToday++; // This includes 'Pending' explicitly
+      }
+    });
+    // For active residents without an explicit record today, count them as pending
+    pendingToday += activeResidents.filter(res => !residentsWithTodaysRecord.has(res.id)).length;
+
+
+    // --- Occupancy Calculations ---
+    const totalCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
+    const totalActiveResidents = activeResidents.length; // This is a more direct measure of occupied beds
+    const vacantBeds = totalCapacity - totalActiveResidents;
+
+    setReportSummaries({
+      upcomingPaymentsAmount: upcomingTotal,
+      overduePaymentsAmount: overdueTotal,
+      collectedThisMonthAmount: collectedThisMonthTotal,
       recentPayments: allPayments.slice(0, 5),
       overdueResidents: overdueResidentsList.sort((a,b) => b.overdueAmount - a.overdueAmount),
+      presentToday,
+      lateToday,
+      absentToday,
+      onLeaveToday,
+      pendingToday,
+      totalActiveResidents,
+      totalCapacity,
+      occupiedBeds: totalActiveResidents,
+      vacantBeds: vacantBeds < 0 ? 0 : vacantBeds, // Prevent negative vacant beds if overbooked
     });
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    calculatePaymentOverview();
-    const handleStorageChange = () => calculatePaymentOverview();
+    calculateReportSummaries();
+    const handleStorageChange = () => calculateReportSummaries();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [calculatePaymentOverview]);
+  }, [calculateReportSummaries]);
 
 
   if (isLoading) {
@@ -179,125 +236,189 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
         <h1 className="text-3xl font-headline font-semibold">Reports Overview</h1>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Link href="/dashboard/billing/collected" className="block hover:shadow-lg transition-shadow rounded-lg">
-          <Card className="shadow-md h-full cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{paymentOverview.collectedThisMonth.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">
-                Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/billing/upcoming" className="block hover:shadow-lg transition-shadow rounded-lg">
-          <Card className="shadow-md h-full cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
-              <Receipt className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{paymentOverview.upcoming.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">
-                Expected from unpaid/partially paid active residents this month
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/billing/overdue" className="block hover:shadow-lg transition-shadow rounded-lg">
-          <Card className="shadow-md h-full cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-               <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">₹{paymentOverview.overdue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">
-                Total outstanding from active residents for previous periods
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+        <p className="text-sm text-muted-foreground">As of: {format(currentDisplayDate, 'PPP p')}</p>
       </div>
       
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
-            <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {paymentOverview.recentPayments.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Resident</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Mode</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paymentOverview.recentPayments.map(p => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.residentName}</TableCell>
-                      <TableCell>{p.roomNumber}</TableCell>
-                      <TableCell>₹{p.amount.toLocaleString()}</TableCell>
-                      <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
-                      <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
-            )}
-          </CardContent>
-        </Card>
+      {/* Financial Summaries Section */}
+      <section>
+        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Financial Summary</h2>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Link href="/dashboard/billing/collected" className="block hover:shadow-lg transition-shadow rounded-lg">
+            <Card className="shadow-md h-full cursor-pointer">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">₹{reportSummaries.collectedThisMonthAmount.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/billing/upcoming" className="block hover:shadow-lg transition-shadow rounded-lg">
+            <Card className="shadow-md h-full cursor-pointer">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
+                <Receipt className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">₹{reportSummaries.upcomingPaymentsAmount.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  Expected from active residents this month
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/billing/overdue" className="block hover:shadow-lg transition-shadow rounded-lg">
+            <Card className="shadow-md h-full cursor-pointer">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">₹{reportSummaries.overduePaymentsAmount.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  Total outstanding from active residents (previous periods)
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      </section>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
-            <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {paymentOverview.overdueResidents.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Resident</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Overdue Amt.</TableHead>
-                    <TableHead>Last Fully Paid</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paymentOverview.overdueResidents.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.name}</TableCell>
-                      <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
-                      <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
-                       <TableCell>{r.lastPaymentMonth}</TableCell>
+      {/* Attendance & Occupancy Summaries Section */}
+      <section>
+        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Attendance & Occupancy</h2>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="shadow-md h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Today's Attendance ({format(currentDisplayDate, 'dd MMM')})</CardTitle>
+              <ClipboardCheck className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent className="text-sm space-y-1">
+              <div className="flex justify-between"><span>Present:</span> <span className="font-semibold">{reportSummaries.presentToday}</span></div>
+              <div className="flex justify-between"><span>Late:</span> <span className="font-semibold">{reportSummaries.lateToday}</span></div>
+              <div className="flex justify-between"><span>Absent:</span> <span className="font-semibold">{reportSummaries.absentToday}</span></div>
+              <div className="flex justify-between"><span>On Leave:</span> <span className="font-semibold">{reportSummaries.onLeaveToday}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Pending:</span> <span className="font-semibold">{reportSummaries.pendingToday}</span></div>
+            </CardContent>
+          </Card>
+           <Card className="shadow-md h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Current Occupancy</CardTitle>
+              <Users className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{reportSummaries.occupiedBeds} / {reportSummaries.totalCapacity}</div>
+              <p className="text-xs text-muted-foreground">Occupied Beds / Total Capacity</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-md h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Vacant Beds</CardTitle>
+              <BedDouble className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{reportSummaries.vacantBeds}</div>
+              <p className="text-xs text-muted-foreground">Available spots in all rooms</p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+      
+      {/* Detailed Tables Section */}
+      <section>
+        <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Detailed Logs</h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
+              <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {reportSummaries.recentPayments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Resident</TableHead>
+                      <TableHead>Room</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Mode</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  </TableHeader>
+                  <TableBody>
+                    {reportSummaries.recentPayments.map(p => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.residentName}</TableCell>
+                        <TableCell>{p.roomNumber}</TableCell>
+                        <TableCell>₹{p.amount.toLocaleString()}</TableCell>
+                        <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
+                        <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
+              <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {reportSummaries.overdueResidents.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Resident</TableHead>
+                      <TableHead>Room</TableHead>
+                      <TableHead>Overdue Amt.</TableHead>
+                      <TableHead>Last Fully Paid</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportSummaries.overdueResidents.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
+                        <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
+                        <TableCell>{r.lastPaymentMonth}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+      <Card className="shadow-lg mt-8">
+        <CardHeader>
+            <CardTitle className="font-headline">Export Options</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <p className="text-muted-foreground">
+                Direct export to Excel or PDF is a complex feature typically requiring server-side processing or larger client-side libraries.
+                For now, you can use your browser's print functionality (Ctrl/Cmd + P) for individual pages or tables, or copy-paste data from tables into a spreadsheet program.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+                We plan to explore more advanced export options in future updates!
+            </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
