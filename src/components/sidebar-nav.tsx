@@ -19,7 +19,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/rooms", label: "Rooms", icon: BedDouble },
   { href: "/dashboard/residents", label: "Residents", icon: Users },
-  { href: "/dashboard/billing", label: "Billing Overview", icon: IndianRupee },
+  { href: "/dashboard/billing", label: "Reports", icon: IndianRupee },
   { href: "/dashboard/payment-management", label: "Payment Management", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];
