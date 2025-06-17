@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail } from "lucide-react"; // Added Mail icon
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
@@ -40,6 +40,8 @@ interface ResidentFormProps {
   isEditing: boolean;
   availableRooms: Room[];
   onCancel: () => void;
+  initialRoomId?: string | null; // New prop
+  initialFloorNumber?: string | null; // New prop
 }
 
 const residentStatuses: { value: ResidentStatus; label: string }[] = [
@@ -54,19 +56,27 @@ const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 const SELECT_FLOOR_SENTINEL = "__SELECT_FLOOR__";
 
 
-export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRooms, onCancel }: ResidentFormProps) {
+export function ResidentForm({
+    onSubmit,
+    defaultValues,
+    isEditing,
+    availableRooms,
+    onCancel,
+    initialRoomId,
+    initialFloorNumber
+}: ResidentFormProps) {
   const { toast } = useToast();
   const form = useForm<ResidentFormValues>({
     resolver: zodResolver(ResidentSchema),
     defaultValues: {
       name: defaultValues?.name || "",
-      email: defaultValues?.email || "", // Added email default
+      email: defaultValues?.email || "",
       contact: defaultValues?.contact || "",
       enquiryDate: defaultValues?.enquiryDate || null,
       joiningDate: defaultValues?.joiningDate || null,
       personalInfo: defaultValues?.personalInfo || "",
-      roomId: defaultValues?.roomId || null,
-      status: defaultValues?.status || "upcoming",
+      roomId: defaultValues?.roomId || initialRoomId || null, // Use initialRoomId if provided
+      status: defaultValues?.status || (isEditing ? "active" : "upcoming"),
       photoUrl: defaultValues?.photoUrl || null,
       idProofUrl: defaultValues?.idProofUrl || null,
       guardianName: defaultValues?.guardianName || null,
@@ -74,38 +84,44 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
     },
   });
 
-  const [uiSelectedFloor, setUiSelectedFloor] = React.useState<string>(SELECT_FLOOR_SENTINEL);
+  const [uiSelectedFloor, setUiSelectedFloor] = React.useState<string>(
+    initialFloorNumber || (defaultValues?.roomId ? availableRooms.find(r => r.id === defaultValues.roomId)?.floorNumber.toString() : SELECT_FLOOR_SENTINEL) || SELECT_FLOOR_SENTINEL
+  );
+
 
   React.useEffect(() => {
-    const initialRoomId = defaultValues?.roomId || null;
-    const initialStatus = defaultValues?.status || (isEditing ? "active" : "upcoming");
+    const effectiveInitialRoomId = initialRoomId || defaultValues?.roomId || null;
+    const effectiveStatus = defaultValues?.status || (isEditing ? "active" : "upcoming");
+    let effectiveFloor = SELECT_FLOOR_SENTINEL;
+
+    if (initialFloorNumber) {
+        effectiveFloor = initialFloorNumber;
+    } else if (effectiveInitialRoomId) {
+        const assignedRoom = availableRooms.find(r => r.id === effectiveInitialRoomId);
+        if (assignedRoom) {
+            effectiveFloor = assignedRoom.floorNumber.toString();
+        }
+    }
+
 
     form.reset({
       name: defaultValues?.name || "",
-      email: defaultValues?.email || "", // Reset email
+      email: defaultValues?.email || "",
       contact: defaultValues?.contact || "",
       enquiryDate: defaultValues?.enquiryDate || null,
       joiningDate: defaultValues?.joiningDate || null,
       personalInfo: defaultValues?.personalInfo || "",
-      roomId: initialRoomId,
-      status: initialStatus,
+      roomId: effectiveInitialRoomId,
+      status: effectiveStatus,
       photoUrl: defaultValues?.photoUrl || null,
       idProofUrl: defaultValues?.idProofUrl || null,
       guardianName: defaultValues?.guardianName || "",
       guardianContact: defaultValues?.guardianContact || "",
     });
 
-    if (initialRoomId) {
-      const assignedRoom = availableRooms.find(r => r.id === initialRoomId);
-      if (assignedRoom) {
-        setUiSelectedFloor(assignedRoom.floorNumber.toString());
-      } else {
-        setUiSelectedFloor(SELECT_FLOOR_SENTINEL); // Assigned room not found
-      }
-    } else {
-      setUiSelectedFloor(SELECT_FLOOR_SENTINEL); // No room assigned by default
-    }
-  }, [defaultValues, form, availableRooms, isEditing]);
+    setUiSelectedFloor(effectiveFloor);
+
+  }, [defaultValues, form, availableRooms, isEditing, initialRoomId, initialFloorNumber]);
 
 
   const floorOptions = React.useMemo(() => {
@@ -126,7 +142,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
 
   const handleFloorSelect = (selectedFloorValue: string) => {
     setUiSelectedFloor(selectedFloorValue);
-    form.setValue('roomId', null); 
+    form.setValue('roomId', null);
     form.trigger('roomId');
   };
 
@@ -140,7 +156,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
           description: `Please select an image smaller than ${MAX_FILE_SIZE_MB}MB.`,
           variant: "destructive",
         });
-        event.target.value = ""; 
+        event.target.value = "";
         return;
       }
       if (!file.type.startsWith("image/")) {
@@ -149,17 +165,17 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
           description: "Please select an image file (e.g., JPG, PNG, GIF).",
           variant: "destructive",
         });
-        event.target.value = ""; 
+        event.target.value = "";
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         form.setValue(fieldName, reader.result as string);
-        form.trigger(fieldName); 
+        form.trigger(fieldName);
       };
       reader.readAsDataURL(file);
     } else {
-      form.setValue(fieldName, null); 
+      form.setValue(fieldName, null);
       form.trigger(fieldName);
     }
   };
@@ -169,8 +185,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       ...values,
       enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
       joiningDate: values.joiningDate === "" ? null : values.joiningDate,
-      photoUrl: values.photoUrl || null, 
-      idProofUrl: values.idProofUrl || null, 
+      photoUrl: values.photoUrl || null,
+      idProofUrl: values.idProofUrl || null,
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
     };
@@ -256,10 +272,10 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 <FormItem>
                   <FormLabel>Resident Photo</FormLabel>
                   <FormControl>
-                     <Input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => handleFileChange(e, "photoUrl")} 
+                     <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, "photoUrl")}
                         className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
                   </FormControl>
@@ -282,10 +298,10 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 <FormItem>
                   <FormLabel>ID Proof</FormLabel>
                   <FormControl>
-                     <Input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => handleFileChange(e, "idProofUrl")} 
+                     <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, "idProofUrl")}
                         className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
                   </FormControl>
@@ -433,7 +449,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                       field.onChange(value);
                       if (value === 'former') {
                         form.setValue('roomId', null);
-                        setUiSelectedFloor(SELECT_FLOOR_SENTINEL); 
+                        setUiSelectedFloor(SELECT_FLOOR_SENTINEL);
                       }
                     }}
                     value={field.value}>
@@ -454,7 +470,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 </FormItem>
               )}
             />
-            
+
             <FormItem>
                 <FormLabel>Select Floor</FormLabel>
                 <Select
@@ -500,8 +516,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                        <SelectItem value={UNASSIGNED_ROOM_SENTINEL}>Unassigned</SelectItem>
                       {roomsOnSelectedFloor
                         .map((room) => (
-                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
-                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
+                          <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== (initialRoomId || defaultValues?.roomId) }>
+                            {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== (initialRoomId || defaultValues?.roomId) ? " - Full" : ""}
                           </SelectItem>
                       ))}
                     </SelectContent>

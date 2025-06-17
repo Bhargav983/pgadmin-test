@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getRoomColumns } from "./room-columns";
 import { RoomForm } from "./room-form";
-import { RoomCard } from "@/components/room-card"; 
+import { RoomCard } from "@/components/room-card";
 import type { Room, RoomFormValues, Resident } from "@/lib/types";
-import { PlusCircle, List, LayoutGrid, Filter } from "lucide-react"; 
+import { PlusCircle, List, LayoutGrid, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -44,11 +44,12 @@ const setStoredData = <T,>(key: string, data: T[]): void => {
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [allResidents, setAllResidents] = useState<Resident[]>([]); // Added to store all residents
   const [filteredRooms, setFilteredRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [selectedFloor, setSelectedFloor] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState<string>(""); // For DataTable's search input
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | undefined>(undefined);
@@ -57,16 +58,16 @@ export default function RoomsPage() {
 
   const { toast } = useToast();
 
-  const fetchRoomsAndOccupancy = useCallback(() => {
+  const fetchRoomsAndResidentsData = useCallback(() => {
     const storedRooms = getStoredData<Room>('pgRooms');
     const storedResidents = getStoredData<Resident>('pgResidents').map(res => ({
         ...res,
-        status: res.status || 'active' 
+        status: res.status || 'active'
     }));
+    setAllResidents(storedResidents); // Store all residents
 
     const roomsWithOccupancy = storedRooms.map(room => {
       const currentOccupancy = storedResidents.filter(resident => resident.roomId === room.id && (resident.status === 'active' || resident.status === 'upcoming')).length;
-      // Ensure floorNumber is a valid number, default to 0 if not present or invalid
       const validFloorNumber = typeof room.floorNumber === 'number' && !isNaN(room.floorNumber) ? room.floorNumber : 0;
       return { ...room, floorNumber: validFloorNumber, currentOccupancy };
     });
@@ -74,16 +75,27 @@ export default function RoomsPage() {
   }, []);
 
   useEffect(() => {
-    fetchRoomsAndOccupancy();
-    const handleStorageChange = () => fetchRoomsAndOccupancy();
+    fetchRoomsAndResidentsData();
+    const handleStorageChange = () => fetchRoomsAndResidentsData();
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchRoomsAndOccupancy]);
+    // Listen for custom dataChanged event if residents are updated elsewhere
+    const handleDataChangedEvent = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail?.storeKey === 'pgResidents') {
+            fetchRoomsAndResidentsData();
+        }
+    };
+    window.addEventListener('dataChanged', handleDataChangedEvent);
+
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('dataChanged', handleDataChangedEvent);
+    };
+  }, [fetchRoomsAndResidentsData]);
 
   useEffect(() => {
-    let currentFilteredRooms = [...rooms]; 
-    
-    // Apply tab filter
+    let currentFilteredRooms = [...rooms];
+
     if (activeTab === 'full') {
       currentFilteredRooms = rooms.filter(room => room.capacity > 0 && room.currentOccupancy === room.capacity);
     } else if (activeTab === 'available') {
@@ -92,13 +104,11 @@ export default function RoomsPage() {
       currentFilteredRooms = rooms.filter(room => room.currentOccupancy === 0);
     }
 
-    // Apply floor filter
     if (selectedFloor !== 'all') {
       currentFilteredRooms = currentFilteredRooms.filter(room => room.floorNumber === parseInt(selectedFloor));
     }
-    
-    // Apply search term filter (for card view, DataTable handles its own)
-    if (viewMode === 'card' && searchTerm) {
+
+    if (searchTerm) { // Apply search term for both table and card view
         currentFilteredRooms = currentFilteredRooms.filter(room =>
             room.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (room.facilities && room.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase()))
@@ -106,7 +116,7 @@ export default function RoomsPage() {
     }
 
     setFilteredRooms(currentFilteredRooms.sort((a,b) => a.roomNumber.localeCompare(b.roomNumber)));
-  }, [rooms, activeTab, selectedFloor, searchTerm, viewMode]);
+  }, [rooms, activeTab, selectedFloor, searchTerm]);
 
   const floorNumbers = useMemo(() => {
     const uniqueFloors = Array.from(new Set(rooms.map(room => room.floorNumber))).sort((a, b) => a - b);
@@ -116,18 +126,18 @@ export default function RoomsPage() {
 
   const handleAddRoom = async (values: RoomFormValues) => {
     try {
-      const newRoom: Room = { 
+      const newRoom: Room = {
         id: crypto.randomUUID(),
         roomNumber: values.roomNumber,
         capacity: values.capacity,
         rent: values.rent,
         floorNumber: values.floorNumber,
         facilities: values.facilities ? values.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
-        currentOccupancy: 0, 
+        currentOccupancy: 0,
       };
       const updatedRooms = [...rooms, newRoom];
       setStoredData('pgRooms', updatedRooms);
-      fetchRoomsAndOccupancy(); 
+      fetchRoomsAndResidentsData();
       setIsFormOpen(false);
       toast({ title: "Room Added", description: `Room ${newRoom.roomNumber} has been successfully added.`, variant: "default" });
     } catch (error) {
@@ -139,18 +149,17 @@ export default function RoomsPage() {
     if (!editingRoom) return;
     try {
       const updatedRooms = rooms.map((room) =>
-        room.id === editingRoom.id ? { 
-            ...room, 
+        room.id === editingRoom.id ? {
+            ...room,
             roomNumber: values.roomNumber,
             capacity: values.capacity,
             rent: values.rent,
             floorNumber: values.floorNumber,
             facilities: values.facilities ? values.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
-            // currentOccupancy is preserved
         } : room
       );
       setStoredData('pgRooms', updatedRooms);
-      fetchRoomsAndOccupancy(); 
+      fetchRoomsAndResidentsData();
       setIsFormOpen(false);
       setEditingRoom(undefined);
       toast({ title: "Room Updated", description: `Room ${values.roomNumber} has been successfully updated.`, variant: "default" });
@@ -172,10 +181,9 @@ export default function RoomsPage() {
   const executeDeleteRoom = () => {
     if (!roomToDelete) return;
     try {
-      const residents = getStoredData<Resident>('pgResidents');
-      const roomHasResidents = residents.some(resident => resident.roomId === roomToDelete && (resident.status === 'active' || resident.status === 'upcoming'));
+      const residentsInRoom = allResidents.filter(resident => resident.roomId === roomToDelete && (resident.status === 'active' || resident.status === 'upcoming'));
 
-      if (roomHasResidents) {
+      if (residentsInRoom.length > 0) {
         toast({ title: "Deletion Forbidden", description: "Cannot delete room. It is currently occupied or reserved by residents.", variant: "destructive" });
         setIsDeleteDialogOpen(false);
         setRoomToDelete(null);
@@ -184,7 +192,7 @@ export default function RoomsPage() {
 
       const updatedRooms = rooms.filter((room) => room.id !== roomToDelete);
       setStoredData('pgRooms', updatedRooms);
-      fetchRoomsAndOccupancy();
+      fetchRoomsAndResidentsData();
       toast({ title: "Room Deleted", description: "Room has been successfully deleted.", variant: "default" });
     } catch (error) {
       toast({ title: "Error", description: "Failed to delete room.", variant: "destructive" });
@@ -226,29 +234,27 @@ export default function RoomsPage() {
           </Button>
         </div>
       </div>
-      
-      {viewMode === 'card' && (
-         <Input
-            placeholder="Search by room no. or facility..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm mb-4"
-        />
-      )}
+
+       <Input
+          placeholder="Search by room no. or facility..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm mb-4" // Applied to both views for consistency
+      />
 
 
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-          <TabsTrigger value="all">All ({rooms.filter(r => selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)).length})</TabsTrigger>
-          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
-          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
-          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0 && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor))).length})</TabsTrigger>
+          <TabsTrigger value="all">All ({rooms.filter(r => (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="full">Full ({rooms.filter(r => r.capacity > 0 && r.currentOccupancy === r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="available">Available ({rooms.filter(r => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
+          <TabsTrigger value="vacant">Vacant ({rooms.filter(r => r.currentOccupancy === 0 && (selectedFloor === 'all' || r.floorNumber === parseInt(selectedFloor)) && (searchTerm === "" || r.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) || (r.facilities && r.facilities.join(', ').toLowerCase().includes(searchTerm.toLowerCase())))).length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
       {viewMode === 'table' ? (
-        filteredRooms.length > 0 || activeTab === 'all' && selectedFloor === 'all' ? (
-          <DataTable columns={columns} data={filteredRooms} filterColumn="roomNumber" filterInputPlaceholder="Filter by room number..." />
+        filteredRooms.length > 0 ? (
+          <DataTable columns={columns} data={filteredRooms} filterColumn="roomNumber" />
         ) : (
           <div className="col-span-full text-center py-10 bg-card border rounded-md">
             <p className="text-muted-foreground">No rooms match the current filter criteria.</p>
@@ -258,7 +264,7 @@ export default function RoomsPage() {
         filteredRooms.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredRooms.map(room => (
-              <RoomCard key={room.id} room={room} onEdit={openEditForm} onDelete={handleDeleteConfirmation} />
+              <RoomCard key={room.id} room={room} residents={allResidents} onEdit={openEditForm} onDelete={handleDeleteConfirmation} />
             ))}
           </div>
         ) : (
