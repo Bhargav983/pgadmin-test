@@ -1,5 +1,6 @@
 
 import { z } from 'zod';
+import { complaintCategories } from './types';
 
 export const RoomSchema = z.object({
   roomNumber: z.string().min(1, { message: "Room number is required." }),
@@ -100,3 +101,33 @@ export const EmailConfigSchema = z.object({
   emailHostPassword: z.string().min(1, "Email host password is required."),
   defaultFromEmail: z.string().email("Invalid default from email address.").min(1, "Default from email is required."),
 });
+
+export const ComplaintStatusSchema = z.enum(['Open', 'In Progress', 'Resolved', 'Closed']);
+const ComplaintCategoryEnum = z.enum(complaintCategories);
+
+export const ComplaintSchema = z.object({
+  residentId: z.string().min(1, "Resident selection is required."),
+  category: z.string().min(1, "Category is required."), // Accepts enum or "Other"
+  customCategory: z.string().optional(),
+  description: z.string().min(3, "Description must be at least 3 characters long."),
+  status: ComplaintStatusSchema.default('Open'),
+  resolutionNotes: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.category === "Other" && (!data.customCategory || data.customCategory.trim() === "")) {
+    ctx.addIssue({
+      path: ["customCategory"],
+      message: "Please specify the category if 'Other' is selected.",
+      code: z.ZodIssueCode.custom,
+    });
+  }
+  if (data.status === 'Resolved' || data.status === 'Closed') {
+    if (!data.resolutionNotes || data.resolutionNotes.trim().length < 3) {
+      ctx.addIssue({
+        path: ["resolutionNotes"],
+        message: "Resolution notes (at least 3 characters) are required when status is Resolved or Closed.",
+        code: z.ZodIssueCode.custom,
+      });
+    }
+  }
+});
+

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard, ClipboardCheck } from "lucide-react";
+import { LayoutDashboard, BedDouble, Users, Cog, IndianRupee, CreditCard, ClipboardCheck, Wrench } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/payment-management", label: "Payment Management", icon: CreditCard },
   { href: "/dashboard/attendance", label: "Attendance Tracking", icon: ClipboardCheck },
   { href: "/dashboard/billing", label: "Reports", icon: IndianRupee },
+  { href: "/dashboard/complaints", label: "Complaints", icon: Wrench },
   { href: "/dashboard/settings", label: "Settings", icon: Cog },
 ];
 
