@@ -52,7 +52,7 @@ const NameCell = ({ row }: { row: { original: Resident, getValue: (key: string) 
 // --- Active Resident Columns ---
 export const getActiveResidentColumns = (
   rooms: Room[],
-  onEdit: (resident: Resident) => void,
+  onEdit: (residentId: string) => void,
   onDelete: (residentId: string) => void,
   onRecordPayment: (resident: Resident) => void,
   onTransfer: (resident: Resident) => void,
@@ -106,7 +106,7 @@ export const getActiveResidentColumns = (
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(resident.id)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRecordPayment(resident)} disabled={!resident.roomId}><CreditCard className="mr-2 h-4 w-4" /> Record Payment</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onTransfer(resident)} disabled={!resident.roomId}><Repeat className="mr-2 h-4 w-4" /> Transfer Room</DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -122,7 +122,7 @@ export const getActiveResidentColumns = (
 // --- Upcoming Resident Columns ---
 export const getUpcomingResidentColumns = (
   rooms: Room[],
-  onEdit: (resident: Resident) => void,
+  onEdit: (residentId: string) => void,
   onDelete: (residentId: string) => void,
   onActivate: (resident: Resident) => void,
 ): ColumnDef<Resident>[] => [
@@ -162,7 +162,7 @@ export const getUpcomingResidentColumns = (
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
             <DropdownMenuItem onClick={() => onActivate(resident)} className="text-green-600 focus:text-green-700 focus:bg-green-100"><UserCheck className="mr-2 h-4 w-4" /> Activate Resident</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(resident.id)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Record</DropdownMenuItem>
           </DropdownMenuContent>
@@ -174,7 +174,7 @@ export const getUpcomingResidentColumns = (
 
 // --- Former Resident Columns ---
 export const getFormerResidentColumns = (
-  onEdit: (resident: Resident) => void,
+  onEdit: (residentId: string) => void,
   onDelete: (residentId: string) => void,
   onReactivate: (resident: Resident) => void,
 ): ColumnDef<Resident>[] => [
@@ -205,7 +205,7 @@ export const getFormerResidentColumns = (
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem asChild><Link href={`/dashboard/residents/${resident.id}`} className="flex items-center w-full"><Eye className="mr-2 h-4 w-4" /> View Details</Link></DropdownMenuItem>
             <DropdownMenuItem onClick={() => onReactivate(resident)} className="text-blue-600 focus:text-blue-700 focus:bg-blue-100"><RotateCcw className="mr-2 h-4 w-4" /> Reactivate (to Upcoming)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(resident)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(resident.id)}><Pencil className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Record</DropdownMenuItem>
           </DropdownMenuContent>

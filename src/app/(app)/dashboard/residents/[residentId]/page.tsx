@@ -11,7 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Resident, Room, Payment, ActivityLogEntry } from '@/lib/types';
 import { format } from 'date-fns';
-import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info } from 'lucide-react';
+import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil } from 'lucide-react';
+import NextImage from 'next/image';
+
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -45,10 +47,14 @@ export default function ResidentDetailPage() {
         ...foundResident,
         payments: Array.isArray(foundResident.payments) ? foundResident.payments : [],
         activityLog: Array.isArray(foundResident.activityLog) ? foundResident.activityLog : [],
+        photoUrl: foundResident.photoUrl || null,
+        idProofUrl: foundResident.idProofUrl || null,
+        guardianName: foundResident.guardianName || null,
+        guardianContact: foundResident.guardianContact || null,
       });
       setRooms(storedRooms);
     } else {
-      setResident(null); // Handle resident not found
+      setResident(null); 
     }
     setIsLoading(false);
   }, [residentId]);
@@ -90,8 +96,9 @@ export default function ResidentDetailPage() {
   }
 
   const currentRoom = resident.roomId ? rooms.find(r => r.id === resident.roomId) : null;
-  const sortedPayments = resident.payments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const sortedActivityLog = resident.activityLog.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const sortedPayments = (resident.payments || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedActivityLog = (resident.activityLog || []).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
 
   const getRoomNumberFromId = (roomId: string | null | undefined): string => {
     if (!roomId) return 'N/A';
@@ -111,27 +118,81 @@ export default function ResidentDetailPage() {
             </Button>
             <h1 className="text-3xl font-headline font-semibold flex items-center">
                 <User className="mr-3 h-8 w-8 text-primary" />
-                {resident.name} - Details
+                {resident.name}
             </h1>
         </div>
-        <Badge variant={resident.status === 'active' ? 'default' : (resident.status === 'upcoming' ? 'secondary' : 'outline')}
-               className={resident.status === 'active' ? 'bg-green-500 text-white' : (resident.status === 'former' ? 'bg-destructive text-destructive-foreground' : '')}>
-          Status: {resident.status.charAt(0).toUpperCase() + resident.status.slice(1)}
-        </Badge>
+        <div className="flex items-center space-x-2">
+            <Badge variant={resident.status === 'active' ? 'default' : (resident.status === 'upcoming' ? 'secondary' : 'outline')}
+                className={resident.status === 'active' ? 'bg-green-500 text-white' : (resident.status === 'former' ? 'bg-destructive text-destructive-foreground' : '')}>
+            Status: {resident.status.charAt(0).toUpperCase() + resident.status.slice(1)}
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/residents/${resident.id}/edit`)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit Profile
+            </Button>
+        </div>
       </div>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent" />Basic Information</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
-          <div><Phone className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Contact:</strong> {resident.contact}</div>
-          <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Enquiry Date:</strong> {resident.enquiryDate ? format(new Date(resident.enquiryDate), 'dd MMM, yyyy') : 'N/A'}</div>
-          <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Joining Date:</strong> {resident.joiningDate ? format(new Date(resident.joiningDate), 'dd MMM, yyyy') : 'N/A'}</div>
-          <div><BedDouble className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Current Room:</strong> {currentRoom ? currentRoom.roomNumber : (resident.status === 'former' ? 'Vacated' : 'Unassigned')}</div>
-          <div className="md:col-span-2 lg:col-span-3"><strong className="text-muted-foreground">Personal Info:</strong> {resident.personalInfo || 'N/A'}</div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+            <Card className="shadow-lg">
+                <CardHeader>
+                <CardTitle className="font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent" />Basic Information</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                    <div><Phone className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Contact:</strong> {resident.contact}</div>
+                    <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Enquiry Date:</strong> {resident.enquiryDate ? format(new Date(resident.enquiryDate), 'dd MMM, yyyy') : 'N/A'}</div>
+                    <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Joining Date:</strong> {resident.joiningDate ? format(new Date(resident.joiningDate), 'dd MMM, yyyy') : 'N/A'}</div>
+                    <div><BedDouble className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Current Room:</strong> {currentRoom ? currentRoom.roomNumber : (resident.status === 'former' ? 'Vacated' : 'Unassigned')}</div>
+                    <div className="md:col-span-2"><strong className="text-muted-foreground">Personal Info:</strong> {resident.personalInfo || 'N/A'}</div>
+                </CardContent>
+            </Card>
+
+            { (resident.guardianName || resident.guardianContact) && (
+                <Card className="shadow-lg">
+                    <CardHeader>
+                    <CardTitle className="font-headline flex items-center"><Shield className="mr-2 h-5 w-5 text-accent" />Guardian Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                        {resident.guardianName && <div><User className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Name:</strong> {resident.guardianName}</div>}
+                        {resident.guardianContact && <div><Phone className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Contact:</strong> {resident.guardianContact}</div>}
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+        <div className="space-y-6">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center"><ImageIcon className="mr-2 h-5 w-5 text-accent"/>Photo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {resident.photoUrl ? (
+                        <NextImage src={resident.photoUrl} alt={`${resident.name}'s photo`} width={200} height={200} className="rounded-md border object-cover mx-auto" data-ai-hint="person portrait" />
+                    ): (
+                        <div className="w-full h-40 bg-muted rounded-md flex items-center justify-center text-muted-foreground">
+                            <ImageIcon className="h-10 w-10" />
+                            <span className="ml-2">No photo</span>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+             <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-accent"/>ID Proof</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {resident.idProofUrl ? (
+                        <NextImage src={resident.idProofUrl} alt={`${resident.name}'s ID proof`} width={300} height={200} className="rounded-md border object-contain mx-auto" data-ai-hint="document id"/>
+                    ): (
+                         <div className="w-full h-40 bg-muted rounded-md flex items-center justify-center text-muted-foreground">
+                            <FileText className="h-10 w-10" />
+                            <span className="ml-2">No ID proof</span>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+      </div>
+
 
       <Card className="shadow-lg">
         <CardHeader>

@@ -45,13 +45,17 @@ export interface Resident {
   id:string;
   name: string;
   contact: string;
-  enquiryDate?: string | null; // ISO string format for date, optional
-  joiningDate?: string | null; // ISO string format for date, optional
+  enquiryDate?: string | null; 
+  joiningDate?: string | null; 
   personalInfo?: string;
-  roomId: string | null; // ID of the room they are currently assigned to
-  status: ResidentStatus; // 'active', 'upcoming', or 'former'
+  roomId: string | null; 
+  status: ResidentStatus; 
   payments: Payment[];
   activityLog: ActivityLogEntry[];
+  photoUrl?: string | null;
+  idProofUrl?: string | null;
+  guardianName?: string | null;
+  guardianContact?: string | null;
 }
 
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;

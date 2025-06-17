@@ -21,6 +21,10 @@ export const ResidentSchema = z.object({
   personalInfo: z.string().optional(),
   roomId: z.string().nullable(), 
   status: ResidentStatusSchema,
+  photoUrl: z.string().url({ message: "Invalid photo URL." }).nullable().optional(),
+  idProofUrl: z.string().url({ message: "Invalid ID proof URL." }).nullable().optional(),
+  guardianName: z.string().nullable().optional(),
+  guardianContact: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.status === 'active' && !data.roomId) {
     ctx.addIssue({
@@ -34,6 +38,15 @@ export const ResidentSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Joining date cannot be earlier than enquiry date.",
       path: ["joiningDate"],
+    });
+  }
+  if (data.guardianContact && !/^\d{10}$/.test(data.guardianContact) && data.guardianContact.trim() !== "") {
+    // Basic 10-digit phone number validation for guardian contact, allows empty string
+    // For more robust validation, consider a library or more complex regex
+    ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Guardian contact must be a valid 10-digit phone number or empty.",
+        path: ["guardianContact"],
     });
   }
 });

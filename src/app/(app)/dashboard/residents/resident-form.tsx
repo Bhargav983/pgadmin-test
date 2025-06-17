@@ -22,29 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
 import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/types";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
 
 interface ResidentFormProps {
-  isOpen: boolean;
-  onClose: () => void;
   onSubmit: (values: ResidentFormValues) => Promise<void>;
   defaultValues?: Partial<Resident>;
   isEditing: boolean;
   availableRooms: Room[];
+  onCancel: () => void;
 }
 
 const residentStatuses: { value: ResidentStatus; label: string }[] = [
@@ -53,7 +46,7 @@ const residentStatuses: { value: ResidentStatus; label: string }[] = [
   { value: "former", label: "Former" }, 
 ];
 
-export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditing, availableRooms }: ResidentFormProps) {
+export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRooms, onCancel }: ResidentFormProps) {
   const form = useForm<ResidentFormValues>({
     resolver: zodResolver(ResidentSchema),
     defaultValues: {
@@ -64,49 +57,61 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
       personalInfo: defaultValues?.personalInfo || "",
       roomId: defaultValues?.roomId || null,
       status: defaultValues?.status || "upcoming",
+      photoUrl: defaultValues?.photoUrl || "",
+      idProofUrl: defaultValues?.idProofUrl || "",
+      guardianName: defaultValues?.guardianName || "",
+      guardianContact: defaultValues?.guardianContact || "",
     },
   });
 
   React.useEffect(() => {
-     if (isOpen) { 
-      if (defaultValues) {
-        form.reset({
-          name: defaultValues.name || "",
-          contact: defaultValues.contact || "",
-          enquiryDate: defaultValues.enquiryDate || null,
-          joiningDate: defaultValues.joiningDate || null,
-          personalInfo: defaultValues.personalInfo || "",
-          roomId: defaultValues.roomId || null,
-          status: defaultValues.status || (isEditing ? "active" : "upcoming"),
-        });
-      } else { 
-        form.reset({ name: "", contact: "", enquiryDate: null, joiningDate: null, personalInfo: "", roomId: null, status: "upcoming" });
-      }
+    if (defaultValues) {
+      form.reset({
+        name: defaultValues.name || "",
+        contact: defaultValues.contact || "",
+        enquiryDate: defaultValues.enquiryDate || null,
+        joiningDate: defaultValues.joiningDate || null,
+        personalInfo: defaultValues.personalInfo || "",
+        roomId: defaultValues.roomId || null,
+        status: defaultValues.status || (isEditing ? "active" : "upcoming"),
+        photoUrl: defaultValues.photoUrl || "",
+        idProofUrl: defaultValues.idProofUrl || "",
+        guardianName: defaultValues.guardianName || "",
+        guardianContact: defaultValues.guardianContact || "",
+      });
+    } else { 
+      form.reset({ 
+        name: "", contact: "", enquiryDate: null, joiningDate: null, 
+        personalInfo: "", roomId: null, status: "upcoming",
+        photoUrl: "", idProofUrl: "", guardianName: "", guardianContact: ""
+      });
     }
-  }, [defaultValues, form, isOpen, isEditing]);
-
+  }, [defaultValues, form, isEditing]);
 
   const handleFormSubmit = async (values: ResidentFormValues) => {
-    // Ensure empty strings for dates are converted to null
-    const processedValues = {
+    const processedValues: ResidentFormValues = {
       ...values,
       enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
       joiningDate: values.joiningDate === "" ? null : values.joiningDate,
+      photoUrl: values.photoUrl === "" ? null : values.photoUrl,
+      idProofUrl: values.idProofUrl === "" ? null : values.idProofUrl,
+      guardianName: values.guardianName === "" ? null : values.guardianName,
+      guardianContact: values.guardianContact === "" ? null : values.guardianContact,
     };
     await onSubmit(processedValues);
   };
+  
+  const photoPreview = form.watch("photoUrl");
+  const idProofPreview = form.watch("idProofUrl");
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="font-headline">{isEditing ? "Edit Resident" : "Add New Resident"}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Update the details of the resident." : "Fill in the details to add a new resident."}
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-4">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><User className="mr-2 h-5 w-5 text-primary"/>Personal Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -133,8 +138,104 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                 </FormItem>
               )}
             />
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <FormField
+            <FormField
+              control={form.control}
+              name="personalInfo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Additional Personal Information (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="e.g., Emergency contact, allergies, etc." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><ImageIcon className="mr-2 h-5 w-5 text-primary"/>Photo & ID</CardTitle>
+            <CardDescription>Enter URLs for photo and ID proof images. Actual file uploads can be integrated later.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="photoUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Photo URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://placehold.co/100x100.png" {...field} />
+                  </FormControl>
+                  {photoPreview && (
+                     <Image src={photoPreview} alt="Photo Preview" width={100} height={100} className="mt-2 rounded-md border" data-ai-hint="person portrait" />
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="idProofUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ID Proof URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://placehold.co/300x200.png" {...field} />
+                  </FormControl>
+                   {idProofPreview && (
+                     <Image src={idProofPreview} alt="ID Proof Preview" width={300} height={200} className="mt-2 rounded-md border object-contain" data-ai-hint="document id" />
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><Shield className="mr-2 h-5 w-5 text-primary"/>Guardian Information (Optional)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="guardianName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Guardian Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Jane Doe" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="guardianContact"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Guardian Contact Number</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., 9876543211" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Status & Dates</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
                 control={form.control}
                 name="enquiryDate"
                 render={({ field }) => (
@@ -273,28 +374,16 @@ export function ResidentForm({ isOpen, onClose, onSubmit, defaultValues, isEditi
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="personalInfo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Personal Information (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="e.g., Emergency contact, allergies, etc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                 {form.formState.isSubmitting ? (isEditing ? "Saving..." : "Adding...") : (isEditing ? "Save Changes" : "Add Resident")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting} className="bg-accent text-accent-foreground hover:bg-accent/90">
+             {form.formState.isSubmitting ? (isEditing ? "Saving..." : "Adding...") : (isEditing ? "Save Changes" : "Add Resident")}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
