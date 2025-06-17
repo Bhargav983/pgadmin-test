@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getResidentColumns } from "./resident-columns";
 import { ResidentForm } from "./resident-form";
-import type { Resident, ResidentFormValues, Room } from "@/lib/types";
+import { PaymentForm } from "@/components/payment-form"; // New Import
+import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput } from "@/lib/types";
 import { PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -23,7 +24,12 @@ import {
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(key);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    console.error("Failed to parse localStorage data for key:", key, e);
+    return [];
+  }
 };
 
 // Helper to set data to localStorage
@@ -40,13 +46,21 @@ export default function ResidentsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [residentToDelete, setResidentToDelete] = useState<string | null>(null);
 
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<Resident | null>(null);
+
   const { toast } = useToast();
 
   const fetchData = useCallback(() => {
-    const storedResidents = getStoredData<Resident>('pgResidents');
+    let storedResidents = getStoredData<Resident>('pgResidents');
     const storedRooms = getStoredData<Room>('pgRooms');
 
-    // Update room occupancy
+    // Ensure all residents have a payments array
+    storedResidents = storedResidents.map(res => ({
+      ...res,
+      payments: Array.isArray(res.payments) ? res.payments : []
+    }));
+
     const roomsWithOccupancy = storedRooms.map(room => ({
       ...room,
       currentOccupancy: storedResidents.filter(resident => resident.roomId === room.id).length
@@ -54,9 +68,8 @@ export default function ResidentsPage() {
     
     setResidents(storedResidents);
     setRooms(roomsWithOccupancy);
-    // Persist updated room occupancy back to localStorage for consistency
-    setStoredData('pgRooms', roomsWithOccupancy);
-
+    setStoredData('pgRooms', roomsWithOccupancy); // Persist updated room occupancy
+    setStoredData('pgResidents', storedResidents); // Persist residents with initialized payments array
   }, []);
 
   useEffect(() => {
@@ -65,10 +78,14 @@ export default function ResidentsPage() {
 
   const handleAddResident = async (values: ResidentFormValues) => {
     try {
-      const newResident: Resident = { ...values, id: crypto.randomUUID() };
+      const newResident: Resident = { 
+        ...values, 
+        id: crypto.randomUUID(),
+        payments: [] // Initialize payments array
+      };
       const updatedResidents = [...residents, newResident];
       setStoredData('pgResidents', updatedResidents);
-      fetchData(); // Re-fetch to update residents list and room occupancy
+      fetchData(); 
       setIsFormOpen(false);
       toast({ title: "Resident Added", description: `${newResident.name} has been successfully added.`, variant: "default" });
     } catch (error) {
@@ -80,10 +97,10 @@ export default function ResidentsPage() {
     if (!editingResident) return;
     try {
       const updatedResidents = residents.map((res) =>
-        res.id === editingResident.id ? { ...res, ...values } : res
+        res.id === editingResident.id ? { ...res, ...values, payments: res.payments || [] } : res // Ensure payments array is preserved
       );
       setStoredData('pgResidents', updatedResidents);
-      fetchData(); // Re-fetch to update residents list and room occupancy
+      fetchData(); 
       setIsFormOpen(false);
       setEditingResident(undefined);
       toast({ title: "Resident Updated", description: `${values.name} has been successfully updated.`, variant: "default" });
@@ -107,7 +124,7 @@ export default function ResidentsPage() {
     try {
       const updatedResidents = residents.filter((res) => res.id !== residentToDelete);
       setStoredData('pgResidents', updatedResidents);
-      fetchData(); // Re-fetch to update residents list and room occupancy
+      fetchData(); 
       toast({ title: "Resident Deleted", description: "Resident has been successfully deleted.", variant: "default" });
     } catch (error) {
        toast({ title: "Error", description: "Failed to delete resident.", variant: "destructive" });
@@ -117,7 +134,45 @@ export default function ResidentsPage() {
     }
   };
 
-  const columns = getResidentColumns(rooms, openEditForm, handleDeleteConfirmation);
+  const openPaymentForm = (resident: Resident) => {
+    setSelectedResidentForPayment(resident);
+    setIsPaymentFormOpen(true);
+  };
+
+  const handleSavePayment = async (paymentInput: PaymentDataInput) => {
+    if (!selectedResidentForPayment || !selectedResidentForPayment.roomId) {
+      toast({ title: "Error", description: "No resident or room selected for payment.", variant: "destructive" });
+      return;
+    }
+    
+    const newPayment: Payment = {
+      id: crypto.randomUUID(),
+      roomId: selectedResidentForPayment.roomId,
+      ...paymentInput,
+    };
+
+    const updatedResidents = residents.map(res => {
+      if (res.id === selectedResidentForPayment.id) {
+        return {
+          ...res,
+          payments: [...(res.payments || []), newPayment]
+        };
+      }
+      return res;
+    });
+
+    setStoredData('pgResidents', updatedResidents);
+    fetchData();
+    setIsPaymentFormOpen(false);
+    setSelectedResidentForPayment(null);
+    toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded successfully.`, variant: "default" });
+  };
+
+
+  const columns = getResidentColumns(rooms, openEditForm, handleDeleteConfirmation, openPaymentForm);
+  
+  const currentRoomForPayment = selectedResidentForPayment ? rooms.find(r => r.id === selectedResidentForPayment.roomId) : null;
+
 
   return (
     <div className="container mx-auto py-4">
@@ -138,6 +193,17 @@ export default function ResidentsPage() {
         isEditing={!!editingResident}
         availableRooms={rooms}
       />
+
+      {selectedResidentForPayment && currentRoomForPayment && (
+        <PaymentForm
+          isOpen={isPaymentFormOpen}
+          onClose={() => { setIsPaymentFormOpen(false); setSelectedResidentForPayment(null); }}
+          onSubmit={handleSavePayment}
+          residentName={selectedResidentForPayment.name}
+          defaultRentAmount={currentRoomForPayment.rent}
+        />
+      )}
+
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>

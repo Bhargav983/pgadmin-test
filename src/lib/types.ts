@@ -1,3 +1,17 @@
+export type PaymentMode = 'Cash' | 'UPI' | 'Bank Transfer';
+export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
+
+export interface Payment {
+  id: string; // Unique ID for the payment transaction
+  month: number; // 1-12
+  year: number;
+  amount: number;
+  date: string; // ISO string format for date
+  mode: PaymentMode;
+  roomId: string; // ID of the room for which payment was made
+  notes?: string;
+}
+
 export interface Room {
   id: string;
   roomNumber: string;
@@ -12,7 +26,9 @@ export interface Resident {
   contact: string;
   personalInfo?: string;
   roomId: string | null; // ID of the room they are assigned to
+  payments: Payment[];
 }
 
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
-export type ResidentFormValues = Omit<Resident, 'id'>;
+export type ResidentFormValues = Omit<Resident, 'id' | 'payments'>;
+export type PaymentFormValues = Omit<Payment, 'id' | 'roomId'>;
