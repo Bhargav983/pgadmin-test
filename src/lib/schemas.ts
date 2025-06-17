@@ -159,3 +159,10 @@ export const AnnouncementSchema = z.object({
     });
   }
 });
+
+export const VacateResidentSchema = z.object({
+    reasonForLeaving: z.string().min(1, { message: "Reason for leaving is required." }),
+    confirmNoDues: z.boolean().refine(val => val === true, { message: "You must confirm no dues are pending."}),
+    confirmNoClaims: z.boolean().refine(val => val === true, { message: "You must confirm no claims/damages."}),
+});
+

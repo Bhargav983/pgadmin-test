@@ -9,8 +9,9 @@ import { getActiveResidentColumns, getUpcomingResidentColumns, getFormerResident
 import { PaymentForm } from "@/components/payment-form";
 import { ReceiptDialog } from "@/components/receipt-dialog";
 import { TransferRoomDialog } from "./transfer-room-dialog";
-import type { Resident, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData, ResidentStatus, ActivityLogEntry, ActivityType } from "@/lib/types";
-import { PlusCircle, UserCheck, UserX, RotateCcw, List, LayoutGrid } from "lucide-react"; // Added List, LayoutGrid
+import { VacateResidentDialog } from "@/components/vacate-resident-dialog"; // Added
+import type { Resident, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData, ResidentStatus, ActivityLogEntry, ActivityType, VacateResidentFormValues } from "@/lib/types";
+import { PlusCircle, UserCheck, UserX, RotateCcw, List, LayoutGrid } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -23,9 +24,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format } from "date-fns";
-import { Input } from "@/components/ui/input"; // Added Input
-import { ResidentCard } from "@/components/resident-card"; // Added ResidentCard
+import { format, getMonth, getYear } from "date-fns";
+import { Input } from "@/components/ui/input"; 
+import { ResidentCard } from "@/components/resident-card"; 
 
 const getStoredData = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -64,8 +65,9 @@ export default function ResidentsPage() {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [residentToTransfer, setResidentToTransfer] = useState<Resident | null>(null);
 
-  const [isVacateConfirmOpen, setIsVacateConfirmOpen] = useState(false);
+  const [isVacateDialogOpen, setIsVacateDialogOpen] = useState(false); // Changed
   const [residentToVacate, setResidentToVacate] = useState<Resident | null>(null);
+  const [vacateResidentDues, setVacateResidentDues] = useState<{ hasDues: boolean; amount: number }>({ hasDues: false, amount: 0 });
   
   const [isActivateConfirmOpen, setIsActivateConfirmOpen] = useState(false);
   const [residentToActivate, setResidentToActivate] = useState<Resident | null>(null);
@@ -146,7 +148,7 @@ export default function ResidentsPage() {
     if (typeof window !== 'undefined') {
       setStoredData('pgRooms', roomsWithOccupancy); 
     }
-  }, [searchTerm]); // Add searchTerm to dependencies
+  }, [searchTerm]); 
 
   useEffect(() => {
     fetchData();
@@ -326,12 +328,58 @@ export default function ResidentsPage() {
   };
   
   const handleOpenVacateDialog = (resident: Resident) => {
+    const today = new Date();
+    const currentMonth = getMonth(today) + 1;
+    const currentYear = getYear(today);
+    let totalDues = 0;
+
+    const room = rooms.find(r => r.id === resident.roomId);
+    if (room && room.rent > 0) {
+        // Calculate current month's due
+        const paidThisMonth = (resident.payments || [])
+            .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
+            .reduce((sum, p) => sum + p.amount, 0);
+        if (paidThisMonth < room.rent) {
+            totalDues += (room.rent - paidThisMonth);
+        }
+
+        // Calculate previous balance
+        const residentJoiningYear = resident.joiningDate ? getYear(new Date(resident.joiningDate)) : currentYear - 1;
+        const residentJoiningMonth = resident.joiningDate ? getMonth(new Date(resident.joiningDate)) + 1 : 1;
+
+        for (let y = residentJoiningYear; y <= currentYear; y++) {
+            const monthStart = (y === residentJoiningYear) ? residentJoiningMonth : 1;
+            const monthEnd = (y < currentYear) ? 12 : currentMonth - 1;
+
+            for (let m = monthStart; m <= monthEnd; m++) {
+                const pastRoom = rooms.find(r => r.id === resident.roomId); // Assuming room didn't change for past dues calc simplicity here
+                if (!pastRoom || pastRoom.rent <= 0) continue;
+
+                const rentForPastMonth = pastRoom.rent;
+                const paymentsForPastMonth = (resident.payments || []).filter(p => p.month === m && p.year === y && p.roomId === pastRoom.id);
+                const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
+                
+                if (amountPaidPastMonth < rentForPastMonth) {
+                    totalDues += (rentForPastMonth - amountPaidPastMonth);
+                }
+            }
+        }
+    }
+
     setResidentToVacate(resident);
-    setIsVacateConfirmOpen(true);
+    setVacateResidentDues({ hasDues: totalDues > 0, amount: totalDues });
+    setIsVacateDialogOpen(true);
   };
 
-  const executeVacateResident = async () => {
+  const executeVacateResident = async (formValues: VacateResidentFormValues) => {
     if (!residentToVacate) return;
+    if (vacateResidentDues.hasDues) {
+        toast({ title: "Error", description: "Cannot vacate resident with outstanding dues.", variant: "destructive" });
+        setIsVacateDialogOpen(false);
+        setResidentToVacate(null);
+        return;
+    }
+
     try {
       const localRoomsData = getStoredData<Room>('pgRooms');
       const vacatedFromRoomNumber = residentToVacate.roomId ? localRoomsData.find(r => r.id === residentToVacate.roomId)?.roomNumber : 'N/A';
@@ -341,11 +389,23 @@ export default function ResidentsPage() {
         res.id === residentToVacate.id ? { ...res, status: 'former' as ResidentStatus, roomId: null } : res
       );
       setStoredData('pgResidents', updatedResidents); 
-      await addActivityLogEntry(residentToVacate.id, 'VACATED', `${residentToVacate.name} vacated from room ${vacatedFromRoomNumber}. Status changed to Former.`, { vacatedFromRoomId: residentToVacate.roomId, vacatedFromRoomNumber });
+      await addActivityLogEntry(residentToVacate.id, 'VACATED', 
+        `${residentToVacate.name} vacated. Reason: ${formValues.reasonForLeaving}.`, 
+        { 
+            vacatedFromRoomId: residentToVacate.roomId, 
+            vacatedFromRoomNumber,
+            reasonForLeaving: formValues.reasonForLeaving,
+            duesClearedConfirmed: formValues.confirmNoDues, // Should be true if we reach here
+            noClaimsConfirmed: formValues.confirmNoClaims,
+        }
+      );
       fetchData();
       toast({ title: "Resident Vacated", description: `${residentToVacate.name} has been set to 'Former' and unassigned from room.`, variant: "default"});
     } catch (error) { toast({ title: "Error", description: "Failed to vacate resident.", variant: "destructive" });
-    } finally { setIsVacateConfirmOpen(false); setResidentToVacate(null); }
+    } finally { 
+        setIsVacateDialogOpen(false); 
+        setResidentToVacate(null); 
+    }
   };
 
   const handleOpenActivateDialog = (resident: Resident) => {
@@ -480,6 +540,17 @@ export default function ResidentsPage() {
           availableRooms={rooms.filter(room => room.id !== residentToTransfer.roomId)} />
       )}
 
+      {residentToVacate && (
+        <VacateResidentDialog
+          isOpen={isVacateDialogOpen}
+          onClose={() => { setIsVacateDialogOpen(false); setResidentToVacate(null); }}
+          onSubmit={executeVacateResident}
+          residentName={residentToVacate.name}
+          hasDues={vacateResidentDues.hasDues}
+          duesAmount={vacateResidentDues.amount}
+        />
+      )}
+
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Delete Resident?</AlertDialogTitle>
@@ -487,17 +558,6 @@ export default function ResidentsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel onClick={() => setResidentToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={executeDeleteResident} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={isVacateConfirmOpen} onOpenChange={setIsVacateConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Vacate Resident: {residentToVacate?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>This will change their status to 'Former' and unassign them from their room. Their record and activity log will remain.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel onClick={() => setResidentToVacate(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={executeVacateResident} className="bg-orange-500 hover:bg-orange-600"><UserX className="mr-2 h-4 w-4"/>Vacate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

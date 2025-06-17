@@ -21,7 +21,13 @@ export interface ActivityLogEntry {
   timestamp: string; // ISO Date string
   type: ActivityType;
   description: string;
-  details?: Record<string, any>;
+  details?: Record<string, any> & {
+    reasonForLeaving?: string;
+    duesClearedConfirmed?: boolean;
+    noClaimsConfirmed?: boolean;
+    vacatedFromRoomId?: string | null;
+    vacatedFromRoomNumber?: string;
+  };
 }
 
 export interface Payment {
@@ -152,4 +158,11 @@ export interface AnnouncementFormValues {
   selectedResidentIds?: string[];
   subject: string;
   body: string;
+}
+
+// For Vacate Resident Dialog
+export interface VacateResidentFormValues {
+    reasonForLeaving: string;
+    confirmNoDues: boolean;
+    confirmNoClaims: boolean;
 }
