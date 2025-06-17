@@ -30,6 +30,10 @@ interface PaymentOverview {
   overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[];
 }
 
+// Define current date and months array outside component to avoid re-renders if used in default state
+const pageLoadDate = new Date();
+const staticMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export default function BillingPage() {
   const [paymentOverview, setPaymentOverview] = useState<PaymentOverview>({
     upcoming: 0,
@@ -39,13 +43,16 @@ export default function BillingPage() {
     overdueResidents: [],
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
+
 
   const calculatePaymentOverview = useCallback(() => {
     setIsLoading(true);
     const residents = getStoredData<Resident>('pgResidents').map(r => ({ ...r, payments: r.payments || [] }));
     const rooms = getStoredData<Room>('pgRooms');
 
-    const currentDate = new Date();
+    const currentDate = new Date(); // Use a fresh Date for calculations
+    setCurrentDisplayDate(currentDate); // Update for display
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
 
@@ -67,38 +74,75 @@ export default function BillingPage() {
       // Calculate current month status
       const paymentThisMonth = resident.payments.find(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id);
       if (paymentThisMonth) {
-        collectedThisMonthTotal += paymentThisMonth.amount;
+         // Sum all payments for the current month/year for this resident/room
+        const totalPaidCurrentMonth = resident.payments
+            .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
+            .reduce((sum, p) => sum + p.amount, 0);
+        
+        collectedThisMonthTotal += totalPaidCurrentMonth;
+        if (totalPaidCurrentMonth < room.rent) {
+            upcomingTotal += (room.rent - totalPaidCurrentMonth);
+        }
       } else {
         upcomingTotal += room.rent;
       }
 
-      // Calculate overdue payments (simple check for previous months, needs more robust logic for full history)
+      // Calculate overdue payments
       let totalDueFromResident = 0;
-      let lastPaidPeriod = { year: 0, month: 0};
+      let lastFullyPaidPeriod = { year: 0, month: 0 };
 
-      // Find the latest payment period
-      resident.payments.forEach(p => {
-        if (p.year > lastPaidPeriod.year || (p.year === lastPaidPeriod.year && p.month > lastPaidPeriod.month)) {
-          if (p.amount >= room.rent) { // Consider it paid if full rent is paid
-             lastPaidPeriod = { year: p.year, month: p.month };
+      // Find the latest fully paid period for this resident's specific room
+      resident.payments
+        .filter(p => p.roomId === room.id)
+        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Process chronologically for finding last full payment
+        .forEach(p => {
+          // Check if this payment fully covers the rent for its month
+          const paymentsForItsPeriod = resident.payments.filter(pm => pm.month === p.month && pm.year === p.year && pm.roomId === room.id);
+          const totalPaidForItsPeriod = paymentsForItsPeriod.reduce((sum, payment) => sum + payment.amount, 0);
+
+          if (totalPaidForItsPeriod >= room.rent) {
+             if (p.year > lastFullyPaidPeriod.year || (p.year === lastFullyPaidPeriod.year && p.month > lastFullyPaidPeriod.month)) {
+                lastFullyPaidPeriod = { year: p.year, month: p.month };
+             }
           }
-        }
-      });
+        });
       
-      // Iterate from a start date (e.g., resident join date or start of year) up to the month before current
-      // This part is simplified: assumes rent is due from start of current year if no payments
-      // A proper implementation would need resident join date.
-      const checkYear = lastPaidPeriod.year === 0 ? currentYear : lastPaidPeriod.year;
-      const checkMonth = lastPaidPeriod.month === 0 ? 1 : lastPaidPeriod.month + 1;
+      let firstCheckYear, firstCheckMonth;
+      if (lastFullyPaidPeriod.year === 0) { // Never made a full payment for any month
+        // Simplification: Assume dues start from Jan of the current year.
+        // A better approach would be the resident's joinDate or first payment month.
+        // For now, let's use the earliest payment date if available, else current year Jan
+        const earliestPayment = resident.payments.length > 0 ? 
+            resident.payments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+            : null;
+        
+        if (earliestPayment) {
+            firstCheckYear = earliestPayment.year;
+            firstCheckMonth = earliestPayment.month;
+        } else {
+            firstCheckYear = currentYear;
+            firstCheckMonth = 1;
+        }
 
-      for (let y = checkYear; y <= currentYear; y++) {
-        const monthStart = (y === checkYear) ? checkMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; // Only up to month before current
+      } else {
+        firstCheckYear = lastFullyPaidPeriod.month === 12 ? lastFullyPaidPeriod.year + 1 : lastFullyPaidPeriod.year;
+        firstCheckMonth = lastFullyPaidPeriod.month === 12 ? 1 : lastFullyPaidPeriod.month + 1;
+      }
+
+      for (let y = firstCheckYear; y <= currentYear; y++) {
+        const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
+        const monthEnd = (y < currentYear) ? 12 : currentMonth - 1; 
         
         for (let m = monthStart; m <= monthEnd; m++) {
-           const paidForThisPeriod = resident.payments.some(p => p.month === m && p.year === y && p.roomId === room.id && p.amount >= room.rent);
-           if (!paidForThisPeriod) {
-             totalDueFromResident += room.rent;
+           if (y > currentYear || (y === currentYear && m >= currentMonth)) {
+             continue; // Don't check future or current month for overdue
+           }
+
+           const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
+           const amountPaidThisMonth = paymentsForThisSpecificMonth.reduce((acc, curr) => acc + curr.amount, 0);
+           
+           if (amountPaidThisMonth < room.rent) {
+               totalDueFromResident += (room.rent - amountPaidThisMonth);
            }
         }
       }
@@ -109,33 +153,30 @@ export default function BillingPage() {
           ...resident, 
           roomDetails: room, 
           overdueAmount: totalDueFromResident,
-          lastPaymentMonth: lastPaidPeriod.month > 0 ? `${months[lastPaidPeriod.month-1]} ${lastPaidPeriod.year}` : 'Never'
+          lastPaymentMonth: lastFullyPaidPeriod.month > 0 ? `${staticMonths[lastFullyPaidPeriod.month-1]} ${lastFullyPaidPeriod.year}` : 'Never Fully Paid'
         });
       }
     });
 
-    // Sort recent payments by date descending
     allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     setPaymentOverview({
       upcoming: upcomingTotal,
       overdue: overdueTotal,
       collectedThisMonth: collectedThisMonthTotal,
-      recentPayments: allPayments.slice(0, 5), // Show top 5 recent
-      overdueResidents: overdueResidentsList,
+      recentPayments: allPayments.slice(0, 5),
+      overdueResidents: overdueResidentsList.sort((a,b) => b.overdueAmount - a.overdueAmount),
     });
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
     calculatePaymentOverview();
-    // Add event listener for storage changes to re-calculate if data is updated in other tabs/components
     const handleStorageChange = () => calculatePaymentOverview();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [calculatePaymentOverview]);
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   if (isLoading) {
     return (
@@ -149,7 +190,6 @@ export default function BillingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
         <h1 className="text-3xl font-headline font-semibold">Billing &amp; Payments</h1>
-        {/* Potentially add a "Refresh Data" button here if needed */}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -161,7 +201,7 @@ export default function BillingPage() {
           <CardContent>
             <div className="text-2xl font-bold">₹{paymentOverview.collectedThisMonth.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              Total rent collected for {months[currentDate.getMonth()]} {currentDate.getFullYear()}
+              Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
             </p>
           </CardContent>
         </Card>
@@ -173,7 +213,7 @@ export default function BillingPage() {
           <CardContent>
             <div className="text-2xl font-bold">₹{paymentOverview.upcoming.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              Expected from unpaid residents this month
+              Expected from unpaid/partially paid residents this month
             </p>
           </CardContent>
         </Card>
@@ -240,7 +280,7 @@ export default function BillingPage() {
                     <TableHead>Resident</TableHead>
                     <TableHead>Room</TableHead>
                     <TableHead>Overdue Amt.</TableHead>
-                    <TableHead>Last Paid</TableHead>
+                    <TableHead>Last Fully Paid</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -279,6 +319,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
-// Helper: Define current date outside component to avoid re-renders if used in default state
-const currentDate = new Date();
