@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon, ClipboardCheck } from "lucide-react";
 import { format, parse, isValid, startOfDay } from 'date-fns';
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const ATTENDANCE_STORAGE_KEY = 'pgAttendanceRecords';
 
