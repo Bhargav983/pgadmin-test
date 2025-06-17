@@ -44,6 +44,8 @@ interface PaymentFormProps {
   onSubmit: (values: PaymentFormValues) => Promise<void>;
   residentName: string;
   defaultRentAmount: number;
+  defaultMonth?: number; // Optional: for pre-filling month
+  defaultYear?: number;  // Optional: for pre-filling year
 }
 
 const months = [
@@ -55,15 +57,23 @@ const months = [
 
 const paymentModes: PaymentMode[] = ['Cash', 'UPI', 'Bank Transfer'];
 
-export function PaymentForm({ isOpen, onClose, onSubmit, residentName, defaultRentAmount }: PaymentFormProps) {
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
+export function PaymentForm({ 
+    isOpen, 
+    onClose, 
+    onSubmit, 
+    residentName, 
+    defaultRentAmount,
+    defaultMonth,
+    defaultYear 
+}: PaymentFormProps) {
+  const initialMonth = defaultMonth || new Date().getMonth() + 1;
+  const initialYear = defaultYear || new Date().getFullYear();
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(PaymentSchema),
     defaultValues: {
-      month: currentMonth,
-      year: currentYear,
+      month: initialMonth,
+      year: initialYear,
       amount: defaultRentAmount,
       date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
       mode: 'UPI',
@@ -74,19 +84,18 @@ export function PaymentForm({ isOpen, onClose, onSubmit, residentName, defaultRe
   React.useEffect(() => {
     if (isOpen) {
       form.reset({
-        month: currentMonth,
-        year: currentYear,
-        amount: defaultRentAmount,
+        month: defaultMonth || new Date().getMonth() + 1,
+        year: defaultYear || new Date().getFullYear(),
+        amount: defaultRentAmount, // Or perhaps a remaining amount if pre-filling for partial payment
         date: new Date().toISOString().split('T')[0],
         mode: 'UPI',
         notes: "",
       });
     }
-  }, [isOpen, defaultRentAmount, form, currentMonth, currentYear]);
+  }, [isOpen, defaultRentAmount, form, defaultMonth, defaultYear]);
 
   const handleFormSubmit = async (values: PaymentFormValues) => {
     await onSubmit(values);
-    // Form reset is handled by useEffect when isOpen changes or props change
   };
 
   return (
@@ -95,7 +104,7 @@ export function PaymentForm({ isOpen, onClose, onSubmit, residentName, defaultRe
         <DialogHeader>
           <DialogTitle className="font-headline">Record Payment for {residentName}</DialogTitle>
           <DialogDescription>
-            Enter the details of the payment received.
+            Enter the details of the payment received for {format(new Date(form.getValues("year"), form.getValues("month")-1), 'MMMM yyyy')}.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -128,7 +137,7 @@ export function PaymentForm({ isOpen, onClose, onSubmit, residentName, defaultRe
                   <FormItem>
                     <FormLabel>Year</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="YYYY" {...field} onChange={e => field.onChange(parseInt(e.target.value) || currentYear)} />
+                      <Input type="number" placeholder="YYYY" {...field} onChange={e => field.onChange(parseInt(e.target.value) || new Date().getFullYear())} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -238,3 +247,4 @@ export function PaymentForm({ isOpen, onClose, onSubmit, residentName, defaultRe
     </Dialog>
   );
 }
+
