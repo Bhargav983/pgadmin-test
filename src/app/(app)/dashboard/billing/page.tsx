@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BadgeDollarSign, Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
@@ -91,12 +92,10 @@ export default function BillingPage() {
       let totalDueFromResident = 0;
       let lastFullyPaidPeriod = { year: 0, month: 0 };
 
-      // Find the latest fully paid period for this resident's specific room
       resident.payments
         .filter(p => p.roomId === room.id)
-        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Process chronologically for finding last full payment
+        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
         .forEach(p => {
-          // Check if this payment fully covers the rent for its month
           const paymentsForItsPeriod = resident.payments.filter(pm => pm.month === p.month && pm.year === p.year && pm.roomId === room.id);
           const totalPaidForItsPeriod = paymentsForItsPeriod.reduce((sum, payment) => sum + payment.amount, 0);
 
@@ -108,10 +107,7 @@ export default function BillingPage() {
         });
       
       let firstCheckYear, firstCheckMonth;
-      if (lastFullyPaidPeriod.year === 0) { // Never made a full payment for any month
-        // Simplification: Assume dues start from Jan of the current year.
-        // A better approach would be the resident's joinDate or first payment month.
-        // For now, let's use the earliest payment date if available, else current year Jan
+      if (lastFullyPaidPeriod.year === 0) { 
         const earliestPayment = resident.payments.length > 0 ? 
             resident.payments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
             : null;
@@ -131,11 +127,11 @@ export default function BillingPage() {
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
         const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth - 1; 
+        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; 
         
         for (let m = monthStart; m <= monthEnd; m++) {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) {
-             continue; // Don't check future or current month for overdue
+             continue; 
            }
 
            const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
@@ -189,46 +185,52 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <h1 className="text-3xl font-headline font-semibold">Billing &amp; Payments</h1>
+        <h1 className="text-3xl font-headline font-semibold">Billing &amp; Payments Overview</h1>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{paymentOverview.collectedThisMonth.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
-            <Receipt className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{paymentOverview.upcoming.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Expected from unpaid/partially paid residents this month
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-             <AlertTriangle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">₹{paymentOverview.overdue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Total outstanding amount from previous periods
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/dashboard/billing/collected" className="block hover:shadow-lg transition-shadow rounded-lg">
+          <Card className="shadow-md h-full cursor-pointer">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Collected (This Month)</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₹{paymentOverview.collectedThisMonth.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                Total rent collected for {staticMonths[currentDisplayDate.getMonth()]} {currentDisplayDate.getFullYear()}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/dashboard/billing/upcoming" className="block hover:shadow-lg transition-shadow rounded-lg">
+          <Card className="shadow-md h-full cursor-pointer">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Upcoming Payments (Current Month)</CardTitle>
+              <Receipt className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₹{paymentOverview.upcoming.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                Expected from unpaid/partially paid residents this month
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/dashboard/billing/overdue" className="block hover:shadow-lg transition-shadow rounded-lg">
+          <Card className="shadow-md h-full cursor-pointer">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+               <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">₹{paymentOverview.overdue.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                Total outstanding amount from previous periods
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
       
       <div className="grid gap-6 lg:grid-cols-2">
@@ -319,3 +321,5 @@ export default function BillingPage() {
     </div>
   );
 }
+
+    
