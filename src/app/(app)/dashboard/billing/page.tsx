@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Receipt, AlertTriangle, CheckCircle2, Users, BedDouble, ClipboardCheck, FileDown } from "lucide-react";
-import type { Resident, Room, Payment, AttendanceRecord } from "@/lib/types"; // Removed AttendanceStatus as it's not directly used here for types
+import type { Resident, Room, Payment, AttendanceRecord } from "@/lib/types"; 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ interface ReportSummaries {
   overduePaymentsAmount: number;
   collectedThisMonthAmount: number;
   recentPayments: (Payment & { residentName: string; roomNumber: string })[];
-  overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[]; // Keep original for calculations
+  overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[]; 
   // Attendance related
   presentToday: number;
   lateToday: number;
@@ -68,10 +68,10 @@ export default function BillingPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate);
-  const [isClient, setIsClient] = useState(false); // For conditional rendering of PDFLink
+  const [isClient, setIsClient] = useState(false); 
 
   useEffect(() => {
-    setIsClient(true); // Ensure PDFDownloadLink only renders on client
+    setIsClient(true); 
   }, []);
 
 
@@ -98,7 +98,7 @@ export default function BillingPage() {
 
     activeResidents.forEach(resident => {
       const room = rooms.find(r => r.id === resident.roomId);
-      if (!room || room.rent <= 0) return; // Skip if no room or no rent for payment calcs
+      if (!room || room.rent <= 0) return; 
 
       resident.payments.forEach(p => {
         allPayments.push({ ...p, residentName: resident.name, roomNumber: room.roomNumber });
@@ -188,26 +188,24 @@ export default function BillingPage() {
     let presentToday = 0, lateToday = 0, absentToday = 0, onLeaveToday = 0, pendingToday = 0;
     const attendanceForToday = allAttendanceRecords.filter(ar => ar.date === todayFormatted);
 
-    // Create a set of resident IDs who have an explicit record for today
     const residentsWithTodaysRecord = new Set(attendanceForToday.map(ar => ar.residentId));
 
     attendanceForToday.forEach(ar => {
-      if (!activeResidents.find(res => res.id === ar.residentId)) return; // Only count active residents
+      if (!activeResidents.find(res => res.id === ar.residentId)) return; 
       switch(ar.status) {
         case 'Present': presentToday++; break;
         case 'Late': lateToday++; break;
         case 'Absent': absentToday++; break;
         case 'On Leave': onLeaveToday++; break;
-        default: pendingToday++; // This includes 'Pending' explicitly
+        default: pendingToday++; 
       }
     });
-    // For active residents without an explicit record today, count them as pending
     pendingToday += activeResidents.filter(res => !residentsWithTodaysRecord.has(res.id)).length;
 
 
     // --- Occupancy Calculations ---
     const totalCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
-    const totalActiveResidents = activeResidents.length; // This is a more direct measure of occupied beds
+    const totalActiveResidents = activeResidents.length; 
     const vacantBeds = totalCapacity - totalActiveResidents;
 
     setReportSummaries({
@@ -224,7 +222,7 @@ export default function BillingPage() {
       totalActiveResidents,
       totalCapacity,
       occupiedBeds: totalActiveResidents,
-      vacantBeds: vacantBeds < 0 ? 0 : vacantBeds, // Prevent negative vacant beds if overbooked
+      vacantBeds: vacantBeds < 0 ? 0 : vacantBeds, 
     });
     setIsLoading(false);
   }, []);
@@ -237,6 +235,29 @@ export default function BillingPage() {
   }, [calculateReportSummaries]);
 
 
+  const preparedOverdueDataForPdf: OverdueResidentForPdf[] = useMemo(() => {
+    return reportSummaries.overdueResidents.map(res => ({
+        id: res.id,
+        name: res.name,
+        roomNumber: res.roomDetails?.roomNumber || 'N/A',
+        overdueAmount: res.overdueAmount,
+        lastPaymentMonth: res.lastPaymentMonth || 'N/A'
+    }));
+  }, [reportSummaries.overdueResidents]);
+
+  const pdfDocumentInstance = useMemo(() => {
+    // This document instance is only created when the data is truly ready for it.
+    // The PDFDownloadLink itself is conditionally rendered based on isClient and data length.
+    return (
+        <OverduePaymentsDocument
+            data={preparedOverdueDataForPdf}
+            totalOverdueAmount={reportSummaries.overduePaymentsAmount}
+            reportDate={`As of ${format(currentDisplayDate, 'PPP')}`}
+        />
+    );
+  }, [preparedOverdueDataForPdf, reportSummaries.overduePaymentsAmount, currentDisplayDate]);
+
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -244,16 +265,6 @@ export default function BillingPage() {
       </div>
     );
   }
-
-  // Prepare simplified data for PDF
-  const preparedOverdueDataForPdf: OverdueResidentForPdf[] = reportSummaries.overdueResidents.map(res => ({
-    id: res.id,
-    name: res.name,
-    roomNumber: res.roomDetails?.roomNumber || 'N/A',
-    overdueAmount: res.overdueAmount,
-    lastPaymentMonth: res.lastPaymentMonth || 'N/A'
-  }));
-
 
   return (
     <div className="space-y-8">
@@ -398,13 +409,7 @@ export default function BillingPage() {
                 </div>
                 {isClient && preparedOverdueDataForPdf.length > 0 && (
                     <PDFDownloadLink
-                    document={
-                        <OverduePaymentsDocument
-                            data={preparedOverdueDataForPdf}
-                            totalOverdueAmount={reportSummaries.overduePaymentsAmount}
-                            reportDate={`As of ${format(currentDisplayDate, 'PPP')}`}
-                        />
-                    }
+                    document={pdfDocumentInstance}
                     fileName={`Overdue_Payments_Report_${format(currentDisplayDate, 'yyyy-MM-dd')}.pdf`}
                     >
                     {({ blob, url, loading, error }) =>
@@ -468,3 +473,5 @@ export default function BillingPage() {
     </div>
   );
 }
+
+    
