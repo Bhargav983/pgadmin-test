@@ -57,7 +57,7 @@ export interface Room {
 export interface Resident {
   id:string;
   name: string;
-  email: string; // Added email field
+  email: string; 
   contact: string;
   enquiryDate?: string | null;
   joiningDate?: string | null;
@@ -66,10 +66,11 @@ export interface Resident {
   status: ResidentStatus;
   payments: Payment[];
   activityLog: ActivityLogEntry[];
-  photoUrl?: string | null; // Will store Data URI
-  idProofUrl?: string | null; // Will store Data URI
+  photoUrl?: string | null; 
+  idProofUrl?: string | null; 
   guardianName?: string | null;
   guardianContact?: string | null;
+  monthlyDiscountAmount?: number | null; // New field for discount
 }
 
 export type AttendanceStatus = 'Pending' | 'Present' | 'Late' | 'Absent' | 'On Leave';
@@ -107,8 +108,8 @@ export interface Complaint {
 
 // For General Info Page
 export interface Holiday {
-  id: string; // Or number if preferred for S.No.
-  date: string; // e.g., "Jan 01" or "2024-01-01"
+  id: string; 
+  date: string; 
   reason: string;
 }
 
@@ -142,6 +143,7 @@ export type RoomFormValues = {
   floorNumber: number;
   facilities?: string; // Comma-separated string from form
 };
+
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
 export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
 export type AttendanceFormValues = Omit<AttendanceRecord, 'id' | 'residentId' | 'date' | 'residentNameAtTime' | 'roomNumberAtTime'>;
@@ -151,7 +153,7 @@ export type ComplaintFormValues = {
   category: ComplaintCategory | string;
   customCategory?: string; // For when category is 'Other'
   description: string;
-  status: ComplaintStatus; // Usually 'Open' on creation, but editable
+  status: ComplaintStatus; 
   resolutionNotes?: string | null;
 };
 // For display in table, includes denormalized data

@@ -36,7 +36,12 @@ export default function OverduePaymentsPage() {
   const fetchOverduePayments = useCallback(() => {
     setIsLoading(true);
     const activeResidents = getStoredData<Resident>('pgResidents')
-        .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+        .map(r => ({ 
+            ...r, 
+            status: r.status || 'active', 
+            payments: r.payments || [],
+            monthlyDiscountAmount: r.monthlyDiscountAmount || 0
+        }))
         .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
     
@@ -51,6 +56,8 @@ export default function OverduePaymentsPage() {
       const room = rooms.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return;
 
+      const discount = resident.monthlyDiscountAmount || 0;
+
       let totalDueFromResident = 0;
       let lastFullyPaidPeriod = { year: 0, month: 0 };
 
@@ -60,40 +67,43 @@ export default function OverduePaymentsPage() {
         .forEach(p => {
           const paymentsForItsPeriod = resident.payments.filter(pm => pm.month === p.month && pm.year === p.year && pm.roomId === room.id);
           const totalPaidForItsPeriod = paymentsForItsPeriod.reduce((sum, payment) => sum + payment.amount, 0);
-          if (totalPaidForItsPeriod >= room.rent) {
+          const effectiveRentForItsPeriod = Math.max(0, room.rent - discount); // Apply discount for historical check too
+
+          if (totalPaidForItsPeriod >= effectiveRentForItsPeriod) {
              if (p.year > lastFullyPaidPeriod.year || (p.year === lastFullyPaidPeriod.year && p.month > lastFullyPaidPeriod.month)) {
                 lastFullyPaidPeriod = { year: p.year, month: p.month };
              }
           }
         });
       
+      const residentJoiningYear = resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : currentYear -1; 
+      const residentJoiningMonth = resident.joiningDate ? new Date(resident.joiningDate).getMonth() + 1 : 1;
+      
       let firstCheckYear, firstCheckMonth;
-      if (lastFullyPaidPeriod.year === 0) {
-        const earliestPayment = resident.payments.length > 0 ? 
-            resident.payments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-            : null;
-        if (earliestPayment) {
-            firstCheckYear = earliestPayment.year;
-            firstCheckMonth = earliestPayment.month;
-        } else {
-            // If no payments, check from start of current year or a sensible default
-            firstCheckYear = currentYear; // Or perhaps resident.joinDate if available
-            firstCheckMonth = 1;
-        }
+      if (lastFullyPaidPeriod.year === 0) { // Never fully paid
+        firstCheckYear = residentJoiningYear;
+        firstCheckMonth = residentJoiningMonth;
       } else {
         firstCheckYear = lastFullyPaidPeriod.month === 12 ? lastFullyPaidPeriod.year + 1 : lastFullyPaidPeriod.year;
         firstCheckMonth = lastFullyPaidPeriod.month === 12 ? 1 : lastFullyPaidPeriod.month + 1;
       }
+      // Ensure check starts from joining date if that's later
+      if (firstCheckYear < residentJoiningYear || (firstCheckYear === residentJoiningYear && firstCheckMonth < residentJoiningMonth)) {
+        firstCheckYear = residentJoiningYear;
+        firstCheckMonth = residentJoiningMonth;
+      }
+
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
         const monthStart = (y === firstCheckYear) ? firstCheckMonth : 1;
-        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; // Only up to previous month
+        const monthEnd = (y < currentYear) ? 12 : currentMonth -1; 
         for (let m = monthStart; m <= monthEnd; m++) {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) continue;
+           const effectiveRentForHistoryMonth = Math.max(0, room.rent - discount); // Apply discount
            const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
            const amountPaidThisMonth = paymentsForThisSpecificMonth.reduce((acc, curr) => acc + curr.amount, 0);
-           if (amountPaidThisMonth < room.rent) {
-               totalDueFromResident += (room.rent - amountPaidThisMonth);
+           if (amountPaidThisMonth < effectiveRentForHistoryMonth) {
+               totalDueFromResident += (effectiveRentForHistoryMonth - amountPaidThisMonth);
            }
         }
       }
@@ -149,7 +159,7 @@ export default function OverduePaymentsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Total Overdue: <span className="text-destructive font-bold">₹{totalOverdueAmount.toLocaleString()}</span></CardTitle>
-          <CardDescription>Active residents with outstanding payments from previous billing periods.</CardDescription>
+          <CardDescription>Active residents with outstanding payments from previous billing periods (after discounts).</CardDescription>
         </CardHeader>
         <CardContent>
           {overdueResidents.length > 0 ? (

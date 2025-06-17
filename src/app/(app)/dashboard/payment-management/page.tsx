@@ -39,7 +39,9 @@ export interface ProcessedPaymentEntry {
   residentId: string;
   name: string;
   roomNumber: string;
-  currentMonthRent: number;
+  currentMonthRent: number; // This will now be effective rent (rent - discount)
+  originalRoomRent: number; // Store original room rent for reference
+  discountApplied: number; // Store discount amount applied
   previousBalance: number;
   totalDueSelectedPeriod: number;
   amountPaidSelectedMonth: number;
@@ -48,9 +50,9 @@ export interface ProcessedPaymentEntry {
   statusSelectedMonth: 'Paid' | 'Partially Paid' | 'Unpaid';
   paymentDateForMonth?: string;
   paymentModeForMonth?: string;
-  resident: Resident; // Full resident object for actions
-  room?: Room; // Full room object
-  isFullyPaidForSelectedPeriod: boolean; // New flag
+  resident: Resident; 
+  room?: Room; 
+  isFullyPaidForSelectedPeriod: boolean;
 }
 
 type PaymentStatusTab = "all" | "unpaid" | "partiallyPaid" | "paid";
@@ -69,6 +71,7 @@ export default function PaymentManagementPage() {
   const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<Resident | null>(null);
   const [paymentFormDefaultMonth, setPaymentFormDefaultMonth] = useState<number | undefined>(undefined);
   const [paymentFormDefaultYear, setPaymentFormDefaultYear] = useState<number | undefined>(undefined);
+  const [paymentFormDefaultRentAmount, setPaymentFormDefaultRentAmount] = useState<number>(0);
   
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [currentReceiptData, setCurrentReceiptData] = useState<ReceiptData | null>(null);
@@ -87,6 +90,7 @@ export default function PaymentManagementPage() {
       status: r.status || 'active',
       payments: r.payments || [],
       activityLog: r.activityLog || [],
+      monthlyDiscountAmount: r.monthlyDiscountAmount || 0,
     }));
     const activeResidents = storedResidents.filter(r => r.status === 'active');
     setAllResidents(storedResidents); 
@@ -96,18 +100,26 @@ export default function PaymentManagementPage() {
 
     const dataForTable: ProcessedPaymentEntry[] = activeResidents.map(resident => {
       const room = storedRooms.find(r => r.id === resident.roomId);
-      const currentMonthRent = room ? room.rent : 0;
+      const originalRoomRent = room ? room.rent : 0;
+      const discountAmount = resident.monthlyDiscountAmount || 0;
+      const effectiveMonthlyRent = Math.max(0, originalRoomRent - discountAmount);
 
       let previousBalance = 0;
-      if (room && room.rent > 0) {
-        for (let y = (resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : filterYear -1) ; y <= filterYear; y++) {
-          const monthStart = (y === (resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : filterYear -1)) ? (resident.joiningDate ? new Date(resident.joiningDate).getMonth() + 1 : 1) : 1;
+      if (room && originalRoomRent > 0) { // Calculate prev balance based on original room rent structure
+        const residentJoiningYear = resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : filterYear -1;
+        const residentJoiningMonth = resident.joiningDate ? new Date(resident.joiningDate).getMonth() + 1 : 1;
+
+        for (let y = residentJoiningYear; y <= filterYear; y++) {
+          const monthStart = (y === residentJoiningYear) ? residentJoiningMonth : 1;
           const monthEnd = (y < filterYear) ? 12 : filterMonth - 1;
 
           for (let m = monthStart; m <= monthEnd; m++) {
             if (y > filterYear || (y === filterYear && m >= filterMonth)) continue;
             
-            const rentForPastMonth = room.rent; 
+            // Find historical room and discount for past period if complex logic is needed
+            // For simplicity, we assume current room's rent and current discount for past dues calc
+            // This could be made more accurate if room/discount history was tracked per resident.
+            const rentForPastMonth = Math.max(0, originalRoomRent - (resident.monthlyDiscountAmount || 0));
             const paymentsForPastMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
             const amountPaidPastMonth = paymentsForPastMonth.reduce((sum, p) => sum + p.amount, 0);
 
@@ -122,7 +134,7 @@ export default function PaymentManagementPage() {
       const amountPaidSelectedMonth = paymentsSelectedMonth.reduce((sum, p) => sum + p.amount, 0);
       
       let statusSelectedMonth: ProcessedPaymentEntry['statusSelectedMonth'] = 'Unpaid';
-      const isFullyPaidForSelectedPeriod = amountPaidSelectedMonth >= currentMonthRent && currentMonthRent > 0;
+      const isFullyPaidForSelectedPeriod = amountPaidSelectedMonth >= effectiveMonthlyRent && effectiveMonthlyRent > 0;
 
       if (isFullyPaidForSelectedPeriod) {
         statusSelectedMonth = 'Paid';
@@ -134,11 +146,13 @@ export default function PaymentManagementPage() {
         residentId: resident.id,
         name: resident.name,
         roomNumber: room?.roomNumber || 'N/A',
-        currentMonthRent: currentMonthRent,
+        currentMonthRent: effectiveMonthlyRent,
+        originalRoomRent: originalRoomRent,
+        discountApplied: discountAmount,
         previousBalance: previousBalance,
-        totalDueSelectedPeriod: currentMonthRent + previousBalance,
+        totalDueSelectedPeriod: effectiveMonthlyRent + previousBalance,
         amountPaidSelectedMonth: amountPaidSelectedMonth,
-        remainingForSelectedMonth: Math.max(0, currentMonthRent - amountPaidSelectedMonth),
+        remainingForSelectedMonth: Math.max(0, effectiveMonthlyRent - amountPaidSelectedMonth),
         dueDate: `5th ${format(new Date(filterYear, filterMonth - 1), 'MMMM yyyy')}`,
         statusSelectedMonth: statusSelectedMonth,
         paymentDateForMonth: paymentsSelectedMonth.length > 0 ? format(new Date(paymentsSelectedMonth[paymentsSelectedMonth.length - 1].date), 'dd MMM, yyyy') : undefined,
@@ -173,6 +187,7 @@ export default function PaymentManagementPage() {
   }, [fetchDataAndProcess]);
 
   useEffect(() => {
+    // Sum of effective rents for the period
     const rentSum = processedPayments.reduce((acc, curr) => acc + curr.currentMonthRent, 0);
     const paidSum = processedPayments.reduce((acc, curr) => acc + curr.amountPaidSelectedMonth, 0);
     const prevBalSum = processedPayments.reduce((acc, curr) => acc + curr.previousBalance, 0);
@@ -180,7 +195,7 @@ export default function PaymentManagementPage() {
     setTotalRentForSelectedPeriod(rentSum);
     setTotalPaidForSelectedPeriod(paidSum);
     setTotalPreviousBalanceSum(prevBalSum);
-    setOverallTotalDue(rentSum + prevBalSum);
+    setOverallTotalDue(rentSum + prevBalSum); // Overall due includes current effective rent + previous balance
   }, [processedPayments]);
 
 
@@ -217,6 +232,7 @@ export default function PaymentManagementPage() {
     setSelectedResidentForPayment(data.resident);
     setPaymentFormDefaultMonth(filterMonth);
     setPaymentFormDefaultYear(filterYear);
+    setPaymentFormDefaultRentAmount(data.currentMonthRent > data.amountPaidSelectedMonth ? data.currentMonthRent - data.amountPaidSelectedMonth : data.previousBalance > 0 ? data.previousBalance : data.currentMonthRent);
     setIsPaymentFormOpen(true);
   };
 
@@ -233,44 +249,59 @@ export default function PaymentManagementPage() {
     }
 
     const roomForPayment = rooms.find(r => r.id === residentData.roomId);
-    if (!roomForPayment || roomForPayment.rent <= 0) {
+    if (!roomForPayment || roomForPayment.rent <= 0) { // Check original rent
         toast({ title: "Error", description: "Resident is not assigned to a valid room with rent or rent is zero.", variant: "destructive" });
         return;
     }
 
     const targetMonth = paymentInput.month;
     const targetYear = paymentInput.year;
-    const roomRent = roomForPayment.rent;
+    const discount = residentData.monthlyDiscountAmount || 0;
+    const effectiveRoomRent = Math.max(0, roomForPayment.rent - discount);
+
 
     const amountAlreadyPaidForTargetPeriod = residentData.payments
       .filter(p => p.month === targetMonth && p.year === targetYear && p.roomId === roomForPayment.id)
       .reduce((sum, p) => sum + p.amount, 0);
 
     let actualPreviousBalance = 0;
-    for (let y = (residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1) ; y <= targetYear; y++) {
-      const monthStart = (y === (residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1)) ? (residentData.joiningDate ? new Date(residentData.joiningDate).getMonth() + 1 : 1) : 1;
+    const residentJoiningYear = residentData.joiningDate ? new Date(residentData.joiningDate).getFullYear() : targetYear -1;
+    const residentJoiningMonth = residentData.joiningDate ? new Date(residentData.joiningDate).getMonth() + 1 : 1;
+
+    for (let y = residentJoiningYear; y <= targetYear; y++) {
+      const monthStart = (y === residentJoiningYear) ? residentJoiningMonth : 1;
       const monthEnd = (y < targetYear) ? 12 : targetMonth - 1;
       for (let m = monthStart; m <= monthEnd; m++) {
         if (y > targetYear || (y === targetYear && m >= targetMonth)) continue;
-        const rentForPastMonth = roomForPayment.rent;
+        // For historical balance, assume current room & discount for simplicity. 
+        // More complex: track historical room assignments & discounts.
+        const historicalEffectiveRent = Math.max(0, roomForPayment.rent - (residentData.monthlyDiscountAmount || 0));
         const paymentsForPastMonth = residentData.payments.filter(p => p.month === m && p.year === y && p.roomId === roomForPayment.id);
         const amountPaidPastMonth = paymentsForPastMonth.reduce((acc, curr) => acc + curr.amount, 0);
-        if (amountPaidPastMonth < rentForPastMonth) {
-          actualPreviousBalance += (rentForPastMonth - amountPaidPastMonth);
+        if (amountPaidPastMonth < historicalEffectiveRent) {
+          actualPreviousBalance += (historicalEffectiveRent - amountPaidPastMonth);
         }
       }
     }
     
-    const isTargetPeriodFullyCoveredByExistingPayments = (amountAlreadyPaidForTargetPeriod >= roomRent);
+    const isTargetPeriodFullyCoveredByExistingPayments = (amountAlreadyPaidForTargetPeriod >= effectiveRoomRent);
     const canProceedWithPayment = !isTargetPeriodFullyCoveredByExistingPayments || actualPreviousBalance > 0;
 
-    if (!canProceedWithPayment) {
+    if (!canProceedWithPayment && effectiveRoomRent > 0) {
       toast({
         title: "Payment Not Allowed",
         description: `Payment for ${format(new Date(targetYear, targetMonth -1), 'MMMM yyyy')} is already settled for ${residentData.name}, and there are no previous dues.`,
         variant: "destructive",
       });
       return;
+    }
+     if (!canProceedWithPayment && effectiveRoomRent <= 0) { // If effective rent is 0 (full discount) and no prev balance
+        toast({
+            title: "No Payment Needed",
+            description: `The effective rent for ${residentData.name} for ${format(new Date(targetYear, targetMonth -1), 'MMMM yyyy')} is ₹0 due to discount, and there are no previous dues.`,
+            variant: "default",
+        });
+        return;
     }
 
     const newPayment: Payment = {
@@ -301,7 +332,7 @@ export default function PaymentManagementPage() {
     });
     
     setStoredData('pgResidents', updatedResidentsList);
-    setAllResidents(updatedResidentsList); // Update local state immediately
+    setAllResidents(updatedResidentsList); 
     
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dataChanged', { detail: { storeKey: 'pgResidents' } }));
@@ -353,7 +384,7 @@ export default function PaymentManagementPage() {
               </Select>
             </div>
             <div className="p-4 bg-secondary rounded-md">
-                <p className="text-xs text-muted-foreground">Rent for {selectedPeriodFormatted}</p>
+                <p className="text-xs text-muted-foreground">Net Rent for {selectedPeriodFormatted}</p>
                 <p className="text-lg font-bold">₹{totalRentForSelectedPeriod.toLocaleString()}</p>
             </div>
              <div className="p-4 bg-secondary rounded-md">
@@ -424,7 +455,7 @@ export default function PaymentManagementPage() {
             onClose={() => { setIsPaymentFormOpen(false); setSelectedResidentForPayment(null); }}
             onSubmit={handleSavePayment} 
             residentName={selectedResidentForPayment.name} 
-            defaultRentAmount={rooms.find(r => r.id === selectedResidentForPayment.roomId)?.rent || 0}
+            defaultRentAmount={paymentFormDefaultRentAmount}
             defaultMonth={paymentFormDefaultMonth}
             defaultYear={paymentFormDefaultYear}
         />
@@ -433,4 +464,3 @@ export default function PaymentManagementPage() {
     </div>
   );
 }
-

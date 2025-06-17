@@ -17,7 +17,7 @@ const UNASSIGNED_ROOM_SENTINEL = "__UNASSIGNED_ROOM_SENTINEL__";
 
 export const ResidentSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
-  email: z.string().email({ message: "Invalid email address." }), // Added email validation
+  email: z.string().email({ message: "Invalid email address." }), 
   contact: z.string().min(1, { message: "Contact information is required." }),
   enquiryDate: z.string().nullable().optional().refine(val => val === null || val === undefined || val === "" || !isNaN(Date.parse(val)), {
     message: "Invalid enquiry date.",
@@ -32,6 +32,7 @@ export const ResidentSchema = z.object({
   idProofUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).max(5 * 1024 * 1024, { message: "ID proof image too large (max 5MB)." }).nullable().optional(),
   guardianName: z.string().nullable().optional(),
   guardianContact: z.string().nullable().optional(),
+  monthlyDiscountAmount: z.coerce.number().nonnegative({ message: "Discount must be a non-negative number."}).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.status === 'active' && data.roomId === null) {
     ctx.addIssue({

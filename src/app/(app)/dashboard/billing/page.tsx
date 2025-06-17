@@ -29,20 +29,17 @@ const getStoredData = <T,>(key: string): T[] => {
 };
 
 interface ReportSummaries {
-  // Payment related
   upcomingPaymentsAmount: number;
   overduePaymentsAmount: number;
   collectedThisMonthAmount: number;
   recentPayments: (Payment & { residentName: string; roomNumber: string })[];
   overdueResidents: (Resident & { roomDetails?: Room; overdueAmount: number; lastPaymentMonth?: string })[]; 
-  // Attendance related
   attendancePresent: number;
   attendanceLate: number;
   attendanceAbsent: number;
   attendanceOnLeave: number;
   attendancePending: number;
   attendanceRangeLabel: string;
-  // Occupancy related
   totalActiveResidents: number;
   totalCapacity: number;
   occupiedBeds: number;
@@ -82,7 +79,7 @@ export default function ReportsOverviewPage() {
     vacantBeds: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate); // For "As of"
+  const [currentDisplayDate, setCurrentDisplayDate] = useState(pageLoadDate); 
   const [isClient, setIsClient] = useState(false);
 
   const [selectedRangeType, setSelectedRangeType] = useState<string>("today");
@@ -135,7 +132,7 @@ export default function ReportsOverviewPage() {
       case "custom":
         let sDate = customStartDate ? startOfDay(customStartDate) : startOfDay(now);
         let eDate = customEndDate ? startOfDay(customEndDate) : startOfDay(now);
-        if (sDate > eDate) [sDate, eDate] = [eDate, sDate]; // Swap if start is after end
+        if (sDate > eDate) [sDate, eDate] = [eDate, sDate]; 
         start = sDate;
         end = eDate;
         label = `Custom (${format(start, "dd MMM yyyy")} - ${format(end, "dd MMM yyyy")})`;
@@ -152,7 +149,12 @@ export default function ReportsOverviewPage() {
   const calculateReportSummaries = useCallback(() => {
     setIsLoading(true);
     const activeResidents = getStoredData<Resident>('pgResidents')
-      .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+      .map(r => ({ 
+          ...r, 
+          status: r.status || 'active', 
+          payments: r.payments || [],
+          monthlyDiscountAmount: r.monthlyDiscountAmount || 0 
+        }))
       .filter(r => r.status === 'active');
     const roomsData = getStoredData<Room>('pgRooms');
     const allAttendanceRecords = getStoredData<AttendanceRecord>('pgAttendanceRecords');
@@ -160,7 +162,6 @@ export default function ReportsOverviewPage() {
     const currentDateForHeader = new Date();
     setCurrentDisplayDate(currentDateForHeader);
 
-    // --- Financial Calculations (based on current month relative to page load) ---
     const currentMonth = currentDateForHeader.getMonth() + 1;
     const currentYear = currentDateForHeader.getFullYear();
     
@@ -174,24 +175,22 @@ export default function ReportsOverviewPage() {
       const room = roomsData.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return; 
 
+      const discount = resident.monthlyDiscountAmount || 0;
+      const effectiveRent = Math.max(0, room.rent - discount);
+
       resident.payments.forEach(p => {
         allPayments.push({ ...p, residentName: resident.name, roomNumber: room.roomNumber });
       });
 
-      const paymentThisMonth = resident.payments.find(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id);
-      if (paymentThisMonth) {
-        const totalPaidCurrentMonth = resident.payments
+      const totalPaidCurrentMonth = resident.payments
             .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
             .reduce((sum, p) => sum + p.amount, 0);
 
-        collectedThisMonthTotal += totalPaidCurrentMonth;
-        if (totalPaidCurrentMonth < room.rent) {
-            upcomingTotal += (room.rent - totalPaidCurrentMonth);
-        }
-      } else {
-        upcomingTotal += room.rent;
+      collectedThisMonthTotal += totalPaidCurrentMonth;
+      if (totalPaidCurrentMonth < effectiveRent) {
+          upcomingTotal += (effectiveRent - totalPaidCurrentMonth);
       }
-
+      
       let totalDueFromResident = 0;
       let lastFullyPaidPeriod = { year: 0, month: 0 };
 
@@ -201,8 +200,10 @@ export default function ReportsOverviewPage() {
         .forEach(p => {
           const paymentsForItsPeriod = resident.payments.filter(pm => pm.month === p.month && pm.year === p.year && pm.roomId === room.id);
           const totalPaidForItsPeriod = paymentsForItsPeriod.reduce((sum, payment) => sum + payment.amount, 0);
+          const effectiveRentForItsPeriod = Math.max(0, room.rent - (resident.monthlyDiscountAmount || 0));
 
-          if (totalPaidForItsPeriod >= room.rent) {
+
+          if (totalPaidForItsPeriod >= effectiveRentForItsPeriod) {
              if (p.year > lastFullyPaidPeriod.year || (p.year === lastFullyPaidPeriod.year && p.month > lastFullyPaidPeriod.month)) {
                 lastFullyPaidPeriod = { year: p.year, month: p.month };
              }
@@ -210,23 +211,23 @@ export default function ReportsOverviewPage() {
         });
 
       let firstCheckYear, firstCheckMonth;
-      if (lastFullyPaidPeriod.year === 0) {
-        const earliestPayment = resident.payments.length > 0 ?
-            resident.payments.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-            : null;
+      const residentJoiningYear = resident.joiningDate ? new Date(resident.joiningDate).getFullYear() : currentYear -1; // fallback to 1 year ago
+      const residentJoiningMonth = resident.joiningDate ? new Date(resident.joiningDate).getMonth() + 1 : 1;
 
-        if (earliestPayment) {
-            firstCheckYear = earliestPayment.year;
-            firstCheckMonth = earliestPayment.month;
-        } else {
-            firstCheckYear = currentYear;
-            firstCheckMonth = 1;
-        }
 
+      if (lastFullyPaidPeriod.year === 0) { // If never fully paid
+          firstCheckYear = residentJoiningYear;
+          firstCheckMonth = residentJoiningMonth;
       } else {
         firstCheckYear = lastFullyPaidPeriod.month === 12 ? lastFullyPaidPeriod.year + 1 : lastFullyPaidPeriod.year;
         firstCheckMonth = lastFullyPaidPeriod.month === 12 ? 1 : lastFullyPaidPeriod.month + 1;
       }
+      // Ensure firstCheckYear/Month are not before joining date
+      if (firstCheckYear < residentJoiningYear || (firstCheckYear === residentJoiningYear && firstCheckMonth < residentJoiningMonth)) {
+        firstCheckYear = residentJoiningYear;
+        firstCheckMonth = residentJoiningMonth;
+      }
+
 
       for (let y = firstCheckYear; y <= currentYear; y++) {
         const monthStartInner = (y === firstCheckYear) ? firstCheckMonth : 1;
@@ -236,12 +237,12 @@ export default function ReportsOverviewPage() {
            if (y > currentYear || (y === currentYear && m >= currentMonth)) {
              continue;
            }
-
+           const effectiveRentForHistoryMonth = Math.max(0, room.rent - (resident.monthlyDiscountAmount || 0));
            const paymentsForThisSpecificMonth = resident.payments.filter(p => p.month === m && p.year === y && p.roomId === room.id);
            const amountPaidThisMonth = paymentsForThisSpecificMonth.reduce((acc, curr) => acc + curr.amount, 0);
 
-           if (amountPaidThisMonth < room.rent) {
-               totalDueFromResident += (room.rent - amountPaidThisMonth);
+           if (amountPaidThisMonth < effectiveRentForHistoryMonth) {
+               totalDueFromResident += (effectiveRentForHistoryMonth - amountPaidThisMonth);
            }
         }
       }
@@ -257,14 +258,12 @@ export default function ReportsOverviewPage() {
     });
     allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // --- Attendance Calculations for Selected Range ---
     const { start: attendanceStartDate, end: attendanceEndDate, label: attendanceRangeLabel } = getDateRangeDetails();
     let presentInRange = 0, lateInRange = 0, absentInRange = 0, onLeaveInRange = 0, pendingInRange = 0;
     
     if (isValid(attendanceStartDate) && isValid(attendanceEndDate)) {
         const daysInSelectedRange = eachDayOfInterval({ start: attendanceStartDate, end: attendanceEndDate });
-        const activeResidentIds = new Set(activeResidents.map(res => res.id));
-
+        
         daysInSelectedRange.forEach(day => {
             const dayFormatted = format(day, 'yyyy-MM-dd');
             activeResidents.forEach(resident => {
@@ -287,8 +286,6 @@ export default function ReportsOverviewPage() {
         });
     }
 
-
-    // --- Occupancy Calculations (current snapshot) ---
     const totalCapacity = roomsData.reduce((sum, room) => sum + room.capacity, 0);
     const totalActiveResidentsCount = activeResidents.length; 
     const vacantBeds = totalCapacity - totalActiveResidentsCount;
@@ -385,7 +382,7 @@ export default function ReportsOverviewPage() {
                   <CardContent>
                     <div className="text-2xl font-bold">₹{reportSummaries.upcomingPaymentsAmount.toLocaleString()}</div>
                     <p className="text-xs text-muted-foreground">
-                      Expected from active residents this month
+                      Expected from active residents this month (after discounts)
                     </p>
                   </CardContent>
                 </Card>
@@ -399,7 +396,7 @@ export default function ReportsOverviewPage() {
                   <CardContent>
                     <div className="text-2xl font-bold text-destructive">₹{reportSummaries.overduePaymentsAmount.toLocaleString()}</div>
                     <p className="text-xs text-muted-foreground">
-                      Total outstanding from active residents (previous periods)
+                      Total outstanding from active residents (previous periods, after discounts)
                     </p>
                   </CardContent>
                 </Card>
@@ -649,4 +646,3 @@ export default function ReportsOverviewPage() {
     </div>
   );
 }
-

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Resident, Room, Payment, ActivityLogEntry } from '@/lib/types';
 import { format } from 'date-fns';
-import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud } from 'lucide-react';
+import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud, IndianRupee } from 'lucide-react';
 import NextImage from 'next/image';
 
 
@@ -51,6 +51,7 @@ export default function ResidentDetailPage() {
         idProofUrl: foundResident.idProofUrl || null,
         guardianName: foundResident.guardianName || null,
         guardianContact: foundResident.guardianContact || null,
+        monthlyDiscountAmount: foundResident.monthlyDiscountAmount || null,
       });
       setRooms(storedRooms);
     } else {
@@ -61,7 +62,6 @@ export default function ResidentDetailPage() {
 
   useEffect(() => {
     fetchResidentDetails();
-    // Listen for storage changes to update if data changes elsewhere
     const handleStorageChange = (event: StorageEvent) => {
         if (event.key === 'pgResidents' || event.key === 'pgRooms') {
             fetchResidentDetails();
@@ -153,6 +153,9 @@ export default function ResidentDetailPage() {
                     <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Enquiry Date:</strong> {resident.enquiryDate ? format(new Date(resident.enquiryDate), 'dd MMM, yyyy') : 'N/A'}</div>
                     <div><CalendarDays className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Joining Date:</strong> {resident.joiningDate ? format(new Date(resident.joiningDate), 'dd MMM, yyyy') : 'N/A'}</div>
                     <div><BedDouble className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Current Room:</strong> {currentRoom ? currentRoom.roomNumber : (resident.status === 'former' ? 'Vacated' : 'Unassigned')}</div>
+                    {resident.monthlyDiscountAmount && resident.monthlyDiscountAmount > 0 && (
+                      <div><IndianRupee className="inline mr-2 h-4 w-4 text-muted-foreground" /><strong>Monthly Discount:</strong> ₹{resident.monthlyDiscountAmount.toLocaleString()}</div>
+                    )}
                     <div className="md:col-span-2"><strong className="text-muted-foreground">Personal Info:</strong> {resident.personalInfo || 'N/A'}</div>
                 </CardContent>
             </Card>

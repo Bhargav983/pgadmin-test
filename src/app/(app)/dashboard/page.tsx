@@ -81,7 +81,12 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsLoading(true);
     const rooms = getStoredData<Room>('pgRooms');
-    const residents = getStoredData<Resident>('pgResidents').map(r => ({...r, status: r.status || 'active', payments: r.payments || []}));
+    const residents = getStoredData<Resident>('pgResidents').map(r => ({
+        ...r, 
+        status: r.status || 'active', 
+        payments: r.payments || [],
+        monthlyDiscountAmount: r.monthlyDiscountAmount || 0,
+    }));
     const attendanceRecords = getStoredData<AttendanceRecord>('pgAttendanceRecords');
     
     setRoomCount(rooms.length);
@@ -92,14 +97,13 @@ export default function DashboardPage() {
     setActiveResidentCount(currentActiveResidents.length);
     setUpcomingResidentCount(currentUpcomingResidents.length);
 
-    // Expected Monthly Rent (from active residents in their assigned rooms)
     const expectedRent = currentActiveResidents.reduce((acc, resident) => {
         const room = rooms.find(r => r.id === resident.roomId);
-        return acc + (room ? room.rent : 0);
+        const discount = resident.monthlyDiscountAmount || 0;
+        return acc + (room ? Math.max(0, room.rent - discount) : 0);
     }, 0);
     setTotalExpectedRent(expectedRent);
 
-    // Today's Attendance
     const todayFormatted = format(startOfDay(new Date()), 'yyyy-MM-dd');
     let present = 0;
     let absent = 0;
@@ -109,7 +113,7 @@ export default function DashboardPage() {
       if (record.date === todayFormatted && activeResidentIds.has(record.residentId)) {
         if (record.status === 'Present' || record.status === 'Late') {
           present++;
-        } else if (record.status === 'Absent' || record.status === 'On Leave') { // Include 'On Leave' in absent count for summary
+        } else if (record.status === 'Absent' || record.status === 'On Leave') { 
           absent++;
         }
       }
@@ -117,20 +121,17 @@ export default function DashboardPage() {
     setPresentTodayCount(present);
     setAbsentTodayCount(absent);
 
-    // Occupancy
     const capacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
     setTotalCapacity(capacity);
     setVacantBeds(Math.max(0, capacity - currentActiveResidents.length));
     
-    // --- Chart Data Calculations ---
-
-    // 1. Rent Collection Data (Current Month)
-    const currentMonth = getMonth(new Date()) + 1; // 1-12
+    const currentMonth = getMonth(new Date()) + 1; 
     const currentYear = getYear(new Date());
     
     const collectedThisMonth = currentActiveResidents.reduce((totalCollected, resident) => {
         const room = rooms.find(r => r.id === resident.roomId);
         if (room) {
+            // No need to consider discount here as payments are actual amounts collected
             const paymentsForMonth = (resident.payments || []).filter(
                 p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id
             );
@@ -140,11 +141,10 @@ export default function DashboardPage() {
     }, 0);
 
     setRentCollectionData([
-      { name: 'Expected', value: expectedRent, fill: CHART_COLORS[0] },
+      { name: 'Expected (Net)', value: expectedRent, fill: CHART_COLORS[0] }, // Expected is now net of discounts
       { name: 'Collected', value: collectedThisMonth, fill: CHART_COLORS[1] }
     ]);
 
-    // 2. Room Occupancy Data
     let fullRooms = 0;
     let partiallyOccupiedRooms = 0;
     let vacantRooms = 0;
@@ -164,7 +164,6 @@ export default function DashboardPage() {
       { name: 'Vacant', value: vacantRooms, fill: CHART_COLORS[2] }
     ]);
 
-    // 3. Resident Status Chart Data
     setResidentStatusChartData([
         { name: 'Active', value: currentActiveResidents.length, fill: CHART_COLORS[0] },
         { name: 'Upcoming', value: currentUpcomingResidents.length, fill: CHART_COLORS[1] },
@@ -181,7 +180,7 @@ export default function DashboardPage() {
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     const percentage = (percent * 100).toFixed(0);
 
-    if (percentage === "0") return null; // Don't render label if value is 0
+    if (percentage === "0") return null; 
 
     return (
       <text
@@ -251,12 +250,12 @@ export default function DashboardPage() {
         <Link href="/dashboard/billing" className="block hover:shadow-xl transition-shadow duration-300 rounded-lg">
           <Card className="shadow-lg h-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expected Monthly Rent</CardTitle>
+              <CardTitle className="text-sm font-medium">Expected Monthly Rent (Net)</CardTitle>
               <IndianRupee className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₹{totalExpectedRent.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">From active residents</p>
+              <p className="text-xs text-muted-foreground">From active residents (after discounts)</p>
             </CardContent>
           </Card>
         </Link>
@@ -292,7 +291,7 @@ export default function DashboardPage() {
         <Card className="shadow-lg">
             <CardHeader>
                 <CardTitle className="font-headline flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5 text-primary"/>Monthly Rent Collection</CardTitle>
-                <CardDescription>Expected vs. Collected rent for {format(new Date(), 'MMMM yyyy')}</CardDescription>
+                <CardDescription>Expected Net Rent vs. Collected rent for {format(new Date(), 'MMMM yyyy')}</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px] w-full">
                 <ChartContainer config={{}} className="w-full h-full">
@@ -327,7 +326,7 @@ export default function DashboardPage() {
                         <PieChart>
                             <Tooltip content={<ChartTooltipContent nameKey="name" />} />
                             <Pie
-                                data={roomOccupancyData.filter(d => d.value > 0)} // Filter out zero values for better visuals
+                                data={roomOccupancyData.filter(d => d.value > 0)} 
                                 dataKey="value"
                                 nameKey="name"
                                 cx="50%"
@@ -382,4 +381,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

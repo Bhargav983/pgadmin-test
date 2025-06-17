@@ -26,6 +26,7 @@ interface UpcomingPaymentResident extends Resident {
   roomDetails: Room | undefined;
   amountPaidThisMonth: number;
   amountDueThisMonth: number;
+  effectiveRentForMonth: number; // To show actual due rent
 }
 
 export default function UpcomingPaymentsPage() {
@@ -37,7 +38,12 @@ export default function UpcomingPaymentsPage() {
   const fetchUpcomingPayments = useCallback(() => {
     setIsLoading(true);
     const activeResidents = getStoredData<Resident>('pgResidents')
-        .map(r => ({ ...r, status: r.status || 'active', payments: r.payments || [] }))
+        .map(r => ({ 
+            ...r, 
+            status: r.status || 'active', 
+            payments: r.payments || [],
+            monthlyDiscountAmount: r.monthlyDiscountAmount || 0 
+        }))
         .filter(r => r.status === 'active');
     const rooms = getStoredData<Room>('pgRooms');
     
@@ -53,18 +59,22 @@ export default function UpcomingPaymentsPage() {
       const room = rooms.find(r => r.id === resident.roomId);
       if (!room || room.rent <= 0) return;
 
+      const discount = resident.monthlyDiscountAmount || 0;
+      const effectiveRent = Math.max(0, room.rent - discount);
+
       const totalPaidCurrentMonth = resident.payments
         .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === room.id)
         .reduce((sum, p) => sum + p.amount, 0);
       
-      if (totalPaidCurrentMonth < room.rent) {
-        const amountDue = room.rent - totalPaidCurrentMonth;
+      if (totalPaidCurrentMonth < effectiveRent) {
+        const amountDue = effectiveRent - totalPaidCurrentMonth;
         upcomingTotal += amountDue;
         residentsWithUpcoming.push({
           ...resident,
           roomDetails: room,
           amountPaidThisMonth: totalPaidCurrentMonth,
           amountDueThisMonth: amountDue,
+          effectiveRentForMonth: effectiveRent,
         });
       }
     });
@@ -109,7 +119,7 @@ export default function UpcomingPaymentsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle>Total Upcoming: <span className="text-blue-500 font-bold">₹{totalUpcomingAmount.toLocaleString()}</span></CardTitle>
-          <CardDescription>Active residents with pending (full or partial) payments for {currentDisplayMonth}.</CardDescription>
+          <CardDescription>Active residents with pending (full or partial) payments for {currentDisplayMonth} (after discounts).</CardDescription>
         </CardHeader>
         <CardContent>
           {upcomingResidents.length > 0 ? (
@@ -118,9 +128,9 @@ export default function UpcomingPaymentsPage() {
                 <TableRow>
                   <TableHead>Resident</TableHead>
                   <TableHead>Room No.</TableHead>
-                  <TableHead>Monthly Rent</TableHead>
-                  <TableHead>Amount Paid</TableHead>
-                  <TableHead>Amount Due</TableHead>
+                  <TableHead>Net Rent (₹)</TableHead>
+                  <TableHead>Amount Paid (₹)</TableHead>
+                  <TableHead>Amount Due (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -128,7 +138,7 @@ export default function UpcomingPaymentsPage() {
                   <TableRow key={r.id}>
                     <TableCell>{r.name}</TableCell>
                     <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
-                    <TableCell>₹{r.roomDetails?.rent.toLocaleString() || 'N/A'}</TableCell>
+                    <TableCell>₹{r.effectiveRentForMonth.toLocaleString()}</TableCell>
                     <TableCell>₹{r.amountPaidThisMonth.toLocaleString()}</TableCell>
                     <TableCell className="font-semibold text-blue-600">₹{r.amountDueThisMonth.toLocaleString()}</TableCell>
                   </TableRow>

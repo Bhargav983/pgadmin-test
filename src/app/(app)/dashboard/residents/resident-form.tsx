@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud, Layers, Mail, IndianRupee } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
@@ -36,7 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ResidentFormProps {
   onSubmit: (values: ResidentFormValues) => Promise<void>;
-  defaultValues?: Partial<ResidentFormValues>; // Changed to ResidentFormValues
+  defaultValues?: Partial<ResidentFormValues>; 
   isEditing: boolean;
   availableRooms: Room[];
   onCancel: () => void;
@@ -67,7 +67,6 @@ export function ResidentForm({
 }: ResidentFormProps) {
   const { toast } = useToast();
   
-  // Initial form setup based on props
   const getInitialFormState = React.useCallback(() => {
     let baseDefaults: Partial<ResidentFormValues> = {
       name: "",
@@ -82,19 +81,20 @@ export function ResidentForm({
       idProofUrl: null,
       guardianName: "",
       guardianContact: "",
+      monthlyDiscountAmount: null,
     };
 
     if (defaultValues) {
       baseDefaults = {
         ...baseDefaults,
         ...defaultValues,
-        // Ensure dates from defaultValues (potentially from query params) are correctly formatted for the form
         enquiryDate: defaultValues.enquiryDate && isValid(new Date(defaultValues.enquiryDate)) ? format(new Date(defaultValues.enquiryDate), 'yyyy-MM-dd') : null,
         joiningDate: defaultValues.joiningDate && isValid(new Date(defaultValues.joiningDate)) ? format(new Date(defaultValues.joiningDate), 'yyyy-MM-dd') : null,
+        monthlyDiscountAmount: defaultValues.monthlyDiscountAmount || null,
       };
     }
     
-    if (initialRoomId) { // This comes from room card click
+    if (initialRoomId) { 
         baseDefaults.roomId = initialRoomId;
     }
 
@@ -123,9 +123,9 @@ export function ResidentForm({
     form.reset(newDefaultValues);
 
     let effectiveFloor = SELECT_FLOOR_SENTINEL;
-    if (initialFloorNumber) { // From room card click
+    if (initialFloorNumber) { 
         effectiveFloor = initialFloorNumber;
-    } else if (newDefaultValues.roomId) { // From editing or enquiry conversion
+    } else if (newDefaultValues.roomId) { 
         const assignedRoom = availableRooms.find(r => r.id === newDefaultValues.roomId);
         if (assignedRoom) {
             effectiveFloor = assignedRoom.floorNumber.toString();
@@ -154,7 +154,7 @@ export function ResidentForm({
 
   const handleFloorSelect = (selectedFloorValue: string) => {
     setUiSelectedFloor(selectedFloorValue);
-    form.setValue('roomId', null); // Reset room when floor changes
+    form.setValue('roomId', null); 
     form.trigger('roomId');
   };
 
@@ -202,6 +202,7 @@ export function ResidentForm({
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
       roomId: values.roomId === UNASSIGNED_ROOM_SENTINEL ? null : values.roomId,
+      monthlyDiscountAmount: values.monthlyDiscountAmount ? Number(values.monthlyDiscountAmount) : null,
     };
     await onSubmit(processedValues);
   };
@@ -370,7 +371,7 @@ export function ResidentForm({
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Status, Dates & Room Assignment</CardTitle>
+            <CardTitle className="font-headline flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Status, Dates, Room & Financials</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -539,6 +540,26 @@ export function ResidentForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="monthlyDiscountAmount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Monthly Discount Amount (₹) (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g., 500" 
+                      {...field} 
+                      value={field.value ?? ""}
+                      onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>Enter the fixed discount amount to be applied monthly to this resident's rent.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
