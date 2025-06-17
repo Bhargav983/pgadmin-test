@@ -4,7 +4,7 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import * as z from "zod"; // Added this import
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -35,6 +35,7 @@ import type { AttendanceStatus } from "@/lib/types";
 import { format } from 'date-fns';
 
 const attendanceStatuses: AttendanceStatus[] = ['Pending', 'Present', 'Late', 'Absent', 'On Leave'];
+const NO_CHANGE_STATUS_VALUE = "__no_change_status__"; // Sentinel value for "No Change"
 
 // Schema for bulk updates - all fields are optional
 const BulkAttendanceUpdateSchema = z.object({
@@ -42,7 +43,7 @@ const BulkAttendanceUpdateSchema = z.object({
     .refine(val => !val || val === "" || /^([01]\d|2[0-3]):([0-5]\d)$/.test(val), { message: "Invalid time format (HH:MM) or leave empty." }),
   checkOutTime: z.string().nullable().optional()
     .refine(val => !val || val === "" || /^([01]\d|2[0-3]):([0-5]\d)$/.test(val), { message: "Invalid time format (HH:MM) or leave empty." }),
-  status: z.enum(['Pending', 'Present', 'Late', 'Absent', 'On Leave']).optional(),
+  status: z.enum(['Pending', 'Present', 'Late', 'Absent', 'On Leave']).optional(), // Status remains optional in the schema
   notes: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.checkInTime && data.checkOutTime && data.checkOutTime < data.checkInTime) {
@@ -74,16 +75,16 @@ export function BulkAttendanceUpdateDialog({
   const form = useForm<BulkAttendanceUpdateValues>({
     resolver: zodResolver(BulkAttendanceUpdateSchema),
     defaultValues: {
-      checkInTime: "", // Explicitly empty string for controlled input
-      checkOutTime: "",// Explicitly empty string
+      checkInTime: "",
+      checkOutTime: "",
       status: undefined, // No default status for bulk
-      notes: "", // Explicitly empty string
+      notes: "",
     },
   });
 
   React.useEffect(() => {
     if (isOpen) {
-      form.reset({ // Reset to empty when dialog opens
+      form.reset({
         checkInTime: "",
         checkOutTime: "",
         status: undefined,
@@ -93,13 +94,13 @@ export function BulkAttendanceUpdateDialog({
   }, [isOpen, form]);
 
   const handleFormSubmit = (values: BulkAttendanceUpdateValues) => {
-    // Filter out undefined values before submitting
     const submittedValues: BulkAttendanceUpdateValues = {};
-    if (values.status !== undefined) submittedValues.status = values.status;
-    // For time and notes, empty string from form means "don't change if null was original",
-    // or set to null if they explicitly want to clear it.
-    // The handler in page.tsx will interpret empty strings vs null vs actual values.
-    // For this dialog, we pass what's entered. An empty string for time means "user wants to clear/not set".
+    // Only include status if it's actually set (not undefined due to 'No Change')
+    if (values.status !== undefined) {
+      submittedValues.status = values.status;
+    }
+    // For time and notes, handle empty strings as intentions to clear or not set.
+    // The parent component will interpret null vs actual values.
     if (values.checkInTime !== undefined) submittedValues.checkInTime = values.checkInTime === "" ? null : values.checkInTime;
     if (values.checkOutTime !== undefined) submittedValues.checkOutTime = values.checkOutTime === "" ? null : values.checkOutTime;
     if (values.notes !== undefined) submittedValues.notes = values.notes === "" ? null : values.notes;
@@ -115,7 +116,7 @@ export function BulkAttendanceUpdateDialog({
         <DialogHeader>
           <DialogTitle className="font-headline">Bulk Update Attendance</DialogTitle>
           <DialogDescription>
-            Applying to {numSelected} resident(s) for {formattedDisplayDate}. Leave fields blank to not change existing values for those fields (except status, which will default to Pending if not set).
+            Applying to {numSelected} resident(s) for {formattedDisplayDate}. Leave fields blank to not change existing values for those fields.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -130,7 +131,7 @@ export function BulkAttendanceUpdateDialog({
                     <Input 
                       type="time" 
                       {...field}
-                      value={field.value || ""} // Ensure controlled input
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -147,7 +148,7 @@ export function BulkAttendanceUpdateDialog({
                     <Input 
                       type="time" 
                       {...field}
-                      value={field.value || ""} // Ensure controlled input
+                      value={field.value || ""}
                      />
                   </FormControl>
                   <FormMessage />
@@ -160,14 +161,17 @@ export function BulkAttendanceUpdateDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status (Optional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === NO_CHANGE_STATUS_VALUE ? undefined : value as AttendanceStatus)} 
+                    value={field.value || NO_CHANGE_STATUS_VALUE}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="No Change / Select Status" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No Change</SelectItem>
+                      <SelectItem value={NO_CHANGE_STATUS_VALUE}>No Change</SelectItem>
                       {attendanceStatuses.map(status => (
                         <SelectItem key={status} value={status}>{status}</SelectItem>
                       ))}
@@ -202,3 +206,4 @@ export function BulkAttendanceUpdateDialog({
     </Dialog>
   );
 }
+
