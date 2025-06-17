@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -11,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CreditCard } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Pencil, Trash2, CreditCard, Repeat, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const getCurrentMonthPaymentStatus = (resident: Resident, rooms: Room[]): { status: string, variant: "default" | "secondary" | "destructive" | "outline", rentAmount: number | null } => {
@@ -26,14 +27,16 @@ const getCurrentMonthPaymentStatus = (resident: Resident, rooms: Room[]): { stat
 
   const rentAmount = assignedRoom.rent;
 
-  const paymentForCurrentMonth = resident.payments.find(
-    (p) => p.month === currentMonth && p.year === currentYear && p.roomId === resident.roomId
-  );
+  // Calculate total paid for the current month and year for this resident and room
+    const totalPaidCurrentMonth = resident.payments
+    .filter(p => p.month === currentMonth && p.year === currentYear && p.roomId === resident.roomId)
+    .reduce((sum, p) => sum + p.amount, 0);
 
-  if (paymentForCurrentMonth && paymentForCurrentMonth.amount >= rentAmount) {
-    return { status: "Paid", variant: "secondary", rentAmount }; // Using 'secondary' for green-like
+
+  if (totalPaidCurrentMonth >= rentAmount) {
+    return { status: "Paid", variant: "secondary", rentAmount };
   }
-  return { status: "Due", variant: "destructive", rentAmount }; // 'destructive' for red-like
+  return { status: "Due", variant: "destructive", rentAmount };
 };
 
 
@@ -42,6 +45,8 @@ export const getResidentColumns = (
   onEdit: (resident: Resident) => void,
   onDelete: (residentId: string) => void,
   onRecordPayment: (resident: Resident) => void,
+  onTransfer: (resident: Resident) => void,
+  onVacate: (resident: Resident) => void,
 ): ColumnDef<Resident>[] => [
   {
     accessorKey: "name",
@@ -68,7 +73,7 @@ export const getResidentColumns = (
     cell: ({ row }) => {
       const roomId = row.getValue("roomId") as string | null;
       const room = rooms.find(r => r.id === roomId);
-      return room ? room.roomNumber : <span className="text-muted-foreground">Not Assigned</span>;
+      return room ? room.roomNumber : <Badge variant="outline">Unassigned</Badge>;
     },
   },
   {
@@ -76,11 +81,14 @@ export const getResidentColumns = (
     header: "Payment (Current Month)",
     cell: ({ row }) => {
       const resident = row.original;
+      if (!resident.roomId) {
+        return <Badge variant="outline">N/A</Badge>;
+      }
       const { status, variant } = getCurrentMonthPaymentStatus(resident, rooms);
       
       let badgeStyle: React.CSSProperties = {};
-      if (variant === "secondary") badgeStyle = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }; // Greenish for Paid
-      if (variant === "destructive") badgeStyle = { backgroundColor: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' }; // Reddish for Due
+      if (variant === "secondary") badgeStyle = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
+      if (variant === "destructive") badgeStyle = { backgroundColor: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' };
 
       return <Badge style={badgeStyle} variant={status === "No Room" ? "outline" : undefined}>{status}</Badge>;
     },
@@ -108,12 +116,18 @@ export const getResidentColumns = (
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => onEdit(resident)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit Resident
+              <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRecordPayment(resident)} disabled={!resident.roomId}>
               <CreditCard className="mr-2 h-4 w-4" /> Record Payment
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onTransfer(resident)} disabled={!resident.roomId}>
+              <Repeat className="mr-2 h-4 w-4" /> Transfer Room
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
+             <DropdownMenuItem onClick={() => onVacate(resident)} disabled={!resident.roomId} className="text-orange-600 focus:text-orange-700 focus:bg-orange-100">
+              <UserX className="mr-2 h-4 w-4" /> Vacate from Room
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDelete(resident.id)} className="text-destructive focus:text-destructive-foreground focus:bg-destructive">
               <Trash2 className="mr-2 h-4 w-4" /> Delete Resident
             </DropdownMenuItem>

@@ -7,7 +7,8 @@ import { DataTable } from "@/components/data-table";
 import { getResidentColumns } from "./resident-columns";
 import { ResidentForm } from "./resident-form";
 import { PaymentForm } from "@/components/payment-form";
-import { ReceiptDialog } from "@/components/receipt-dialog"; // New Import
+import { ReceiptDialog } from "@/components/receipt-dialog";
+import { TransferRoomDialog } from "./transfer-room-dialog"; // New Import
 import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData } from "@/lib/types";
 import { PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -45,15 +46,21 @@ export default function ResidentsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingResident, setEditingResident] = useState<Resident | undefined>(undefined);
+  
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [residentToDelete, setResidentToDelete] = useState<string | null>(null);
 
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<Resident | null>(null);
 
-  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false); // New State
-  const [currentReceiptData, setCurrentReceiptData] = useState<ReceiptData | null>(null); // New State
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
+  const [currentReceiptData, setCurrentReceiptData] = useState<ReceiptData | null>(null);
 
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [residentToTransfer, setResidentToTransfer] = useState<Resident | null>(null);
+
+  const [isVacateConfirmOpen, setIsVacateConfirmOpen] = useState(false);
+  const [residentToVacate, setResidentToVacate] = useState<Resident | null>(null);
 
   const { toast } = useToast();
 
@@ -63,7 +70,7 @@ export default function ResidentsPage() {
 
     storedResidents = storedResidents.map(res => ({
       ...res,
-      payments: Array.isArray(res.payments) ? res.payments.map(p => ({...p, receiptId: p.receiptId || '' })) : [] // ensure receiptId
+      payments: Array.isArray(res.payments) ? res.payments.map(p => ({...p, receiptId: p.receiptId || '' })) : []
     }));
 
     const roomsWithOccupancy = storedRooms.map(room => ({
@@ -73,7 +80,7 @@ export default function ResidentsPage() {
     
     setResidents(storedResidents);
     setRooms(roomsWithOccupancy);
-    if (typeof window !== 'undefined') { // ensure localStorage operations are client-side only
+    if (typeof window !== 'undefined') {
       setStoredData('pgRooms', roomsWithOccupancy); 
       setStoredData('pgResidents', storedResidents);
     }
@@ -183,16 +190,77 @@ export default function ResidentsPage() {
         payment: newPayment,
         residentName: selectedResidentForPayment.name,
         roomNumber: roomForPayment.roomNumber,
-        pgName: "PG Admin" // Or from a config/context later
+        pgName: "PG Admin"
     });
-    setIsReceiptDialogOpen(true); // Open receipt dialog
+    setIsReceiptDialogOpen(true);
 
     toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded. Receipt generated.`, variant: "default" });
-    setSelectedResidentForPayment(null); // Clear selection after processing
+    setSelectedResidentForPayment(null);
+  };
+
+  const handleOpenTransferDialog = (resident: Resident) => {
+    setResidentToTransfer(resident);
+    setIsTransferDialogOpen(true);
+  };
+
+  const handleTransferResidentSubmit = (newRoomId: string) => {
+    if (!residentToTransfer || !newRoomId) {
+      toast({ title: "Error", description: "Invalid transfer details.", variant: "destructive" });
+      return;
+    }
+    if (residentToTransfer.roomId === newRoomId) {
+       toast({ title: "Info", description: "Resident is already in the selected room.", variant: "default" });
+       setIsTransferDialogOpen(false);
+       setResidentToTransfer(null);
+       return;
+    }
+
+    try {
+      const updatedResidents = residents.map(res => 
+        res.id === residentToTransfer.id ? { ...res, roomId: newRoomId } : res
+      );
+      setStoredData('pgResidents', updatedResidents);
+      fetchData();
+      toast({ title: "Resident Transferred", description: `${residentToTransfer.name} has been transferred successfully.`, variant: "default"});
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to transfer resident.", variant: "destructive" });
+    } finally {
+      setIsTransferDialogOpen(false);
+      setResidentToTransfer(null);
+    }
+  };
+
+  const handleOpenVacateDialog = (resident: Resident) => {
+    setResidentToVacate(resident);
+    setIsVacateConfirmOpen(true);
+  };
+
+  const executeVacateResident = () => {
+    if (!residentToVacate) return;
+    try {
+      const updatedResidents = residents.map(res => 
+        res.id === residentToVacate.id ? { ...res, roomId: null } : res
+      );
+      setStoredData('pgResidents', updatedResidents);
+      fetchData();
+      toast({ title: "Resident Vacated", description: `${residentToVacate.name} has been vacated from their room.`, variant: "default"});
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to vacate resident.", variant: "destructive" });
+    } finally {
+      setIsVacateConfirmOpen(false);
+      setResidentToVacate(null);
+    }
   };
 
 
-  const columns = getResidentColumns(rooms, openEditForm, handleDeleteConfirmation, openPaymentForm);
+  const columns = getResidentColumns(
+    rooms, 
+    openEditForm, 
+    handleDeleteConfirmation, 
+    openPaymentForm,
+    handleOpenTransferDialog, // New
+    handleOpenVacateDialog    // New
+  );
   
   const currentRoomForPayment = selectedResidentForPayment ? rooms.find(r => r.id === selectedResidentForPayment.roomId) : null;
 
@@ -235,23 +303,51 @@ export default function ResidentsPage() {
         />
       )}
 
+      {residentToTransfer && (
+        <TransferRoomDialog
+          isOpen={isTransferDialogOpen}
+          onClose={() => { setIsTransferDialogOpen(false); setResidentToTransfer(null); }}
+          onSubmit={handleTransferResidentSubmit}
+          residentName={residentToTransfer.name}
+          currentRoomId={residentToTransfer.roomId}
+          availableRooms={rooms.filter(room => room.id !== residentToTransfer.roomId)} // Pass rooms excluding current
+        />
+      )}
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure you want to delete this resident?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the resident.
+              This action cannot be undone. This will permanently delete the resident's record, including all payment history.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setResidentToDelete(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={executeDeleteResident} className="bg-destructive hover:bg-destructive/90">
-              Delete
+              Delete Resident
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={isVacateConfirmOpen} onOpenChange={setIsVacateConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to vacate this resident?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unassign the resident from their current room. Their record will remain, but they will not be associated with any room.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setResidentToVacate(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executeVacateResident} className="bg-orange-500 hover:bg-orange-600">
+              Vacate Resident
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
