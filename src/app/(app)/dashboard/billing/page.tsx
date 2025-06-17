@@ -318,75 +318,82 @@ export default function ReportsOverviewPage() {
           
           <section className="mt-8">
             <h2 className="text-2xl font-headline font-semibold mb-4 text-primary">Detailed Financial Logs</h2>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="font-headline flex items-center"><Receipt className="mr-2 h-5 w-5 text-primary" />Recent Payments</CardTitle>
-                  <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.recentPayments.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Resident</TableHead>
-                          <TableHead>Room</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Mode</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {reportSummaries.recentPayments.map(p => (
-                          <TableRow key={p.id}>
-                            <TableCell>{p.residentName}</TableCell>
-                            <TableCell>{p.roomNumber}</TableCell>
-                            <TableCell>₹{p.amount.toLocaleString()}</TableCell>
-                            <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
-                            <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
+            <Tabs defaultValue="recentPayments" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="recentPayments"><Receipt className="mr-2 h-4 w-4" />Recent Payments</TabsTrigger>
+                <TabsTrigger value="overdueResidents"><AlertTriangle className="mr-2 h-4 w-4" />Overdue Residents</TabsTrigger>
+              </TabsList>
+              <TabsContent value="recentPayments" className="mt-4">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="font-headline flex items-center">Recent Payments</CardTitle>
+                    <CardDescription>Last 5 recorded payment transactions (from active residents).</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.recentPayments.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Resident</TableHead>
+                            <TableHead>Room</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Mode</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" />Overdue Residents</CardTitle>
-                    <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.overdueResidents.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Resident</TableHead>
-                          <TableHead>Room</TableHead>
-                          <TableHead>Overdue Amt.</TableHead>
-                          <TableHead>Last Fully Paid</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {reportSummaries.overdueResidents.map(r => (
-                          <TableRow key={r.id}>
-                            <TableCell>{r.name}</TableCell>
-                            <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
-                            <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
-                            <TableCell>{r.lastPaymentMonth}</TableCell>
+                        </TableHeader>
+                        <TableBody>
+                          {reportSummaries.recentPayments.map(p => (
+                            <TableRow key={p.id}>
+                              <TableCell>{p.residentName}</TableCell>
+                              <TableCell>{p.roomNumber}</TableCell>
+                              <TableCell>₹{p.amount.toLocaleString()}</TableCell>
+                              <TableCell>{format(new Date(p.date), 'dd MMM, yyyy')}</TableCell>
+                              <TableCell><Badge variant="outline">{p.mode}</Badge></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-muted-foreground">No recent payments recorded from active residents.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="overdueResidents" className="mt-4">
+                <Card className="shadow-lg">
+                  <CardHeader>
+                      <CardTitle className="font-headline flex items-center text-destructive">Overdue Residents</CardTitle>
+                      <CardDescription>Active residents with outstanding payments from previous periods.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading && isClient ? <div className="text-center text-muted-foreground py-4">Loading details...</div> : reportSummaries.overdueResidents.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Resident</TableHead>
+                            <TableHead>Room</TableHead>
+                            <TableHead>Overdue Amt.</TableHead>
+                            <TableHead>Last Fully Paid</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                        </TableHeader>
+                        <TableBody>
+                          {reportSummaries.overdueResidents.map(r => (
+                            <TableRow key={r.id}>
+                              <TableCell>{r.name}</TableCell>
+                              <TableCell>{r.roomDetails?.roomNumber || 'N/A'}</TableCell>
+                              <TableCell className="text-destructive font-semibold">₹{r.overdueAmount.toLocaleString()}</TableCell>
+                              <TableCell>{r.lastPaymentMonth}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-muted-foreground">No active residents with overdue payments currently.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </section>
         </TabsContent>
 
