@@ -3,6 +3,7 @@ export type PaymentStatus = 'Paid' | 'Due' | 'Overdue' | 'Partial';
 
 export interface Payment {
   id: string; // Unique ID for the payment transaction
+  receiptId?: string; // Unique ID for the generated receipt
   month: number; // 1-12
   year: number;
   amount: number;
@@ -31,4 +32,12 @@ export interface Resident {
 
 export type RoomFormValues = Omit<Room, 'id' | 'currentOccupancy'>;
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments'>;
-export type PaymentFormValues = Omit<Payment, 'id' | 'roomId'>;
+export type PaymentFormValues = Omit<Payment, 'id' | 'roomId' | 'receiptId'>;
+
+// For receipt display
+export interface ReceiptData {
+  payment: Payment;
+  residentName: string;
+  roomNumber: string;
+  pgName?: string; // Optional, can be defaulted
+}

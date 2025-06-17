@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -5,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { getResidentColumns } from "./resident-columns";
 import { ResidentForm } from "./resident-form";
-import { PaymentForm } from "@/components/payment-form"; // New Import
-import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput } from "@/lib/types";
+import { PaymentForm } from "@/components/payment-form";
+import { ReceiptDialog } from "@/components/receipt-dialog"; // New Import
+import type { Resident, ResidentFormValues, Room, Payment, PaymentFormValues as PaymentDataInput, ReceiptData } from "@/lib/types";
 import { PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -49,16 +51,19 @@ export default function ResidentsPage() {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<Resident | null>(null);
 
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false); // New State
+  const [currentReceiptData, setCurrentReceiptData] = useState<ReceiptData | null>(null); // New State
+
+
   const { toast } = useToast();
 
   const fetchData = useCallback(() => {
     let storedResidents = getStoredData<Resident>('pgResidents');
     const storedRooms = getStoredData<Room>('pgRooms');
 
-    // Ensure all residents have a payments array
     storedResidents = storedResidents.map(res => ({
       ...res,
-      payments: Array.isArray(res.payments) ? res.payments : []
+      payments: Array.isArray(res.payments) ? res.payments.map(p => ({...p, receiptId: p.receiptId || '' })) : [] // ensure receiptId
     }));
 
     const roomsWithOccupancy = storedRooms.map(room => ({
@@ -68,8 +73,10 @@ export default function ResidentsPage() {
     
     setResidents(storedResidents);
     setRooms(roomsWithOccupancy);
-    setStoredData('pgRooms', roomsWithOccupancy); // Persist updated room occupancy
-    setStoredData('pgResidents', storedResidents); // Persist residents with initialized payments array
+    if (typeof window !== 'undefined') { // ensure localStorage operations are client-side only
+      setStoredData('pgRooms', roomsWithOccupancy); 
+      setStoredData('pgResidents', storedResidents);
+    }
   }, []);
 
   useEffect(() => {
@@ -81,7 +88,7 @@ export default function ResidentsPage() {
       const newResident: Resident = { 
         ...values, 
         id: crypto.randomUUID(),
-        payments: [] // Initialize payments array
+        payments: [] 
       };
       const updatedResidents = [...residents, newResident];
       setStoredData('pgResidents', updatedResidents);
@@ -97,7 +104,7 @@ export default function ResidentsPage() {
     if (!editingResident) return;
     try {
       const updatedResidents = residents.map((res) =>
-        res.id === editingResident.id ? { ...res, ...values, payments: res.payments || [] } : res // Ensure payments array is preserved
+        res.id === editingResident.id ? { ...res, ...values, payments: res.payments || [] } : res
       );
       setStoredData('pgResidents', updatedResidents);
       fetchData(); 
@@ -145,8 +152,15 @@ export default function ResidentsPage() {
       return;
     }
     
+    const roomForPayment = rooms.find(r => r.id === selectedResidentForPayment.roomId);
+    if (!roomForPayment) {
+        toast({ title: "Error", description: "Could not find room details for payment.", variant: "destructive" });
+        return;
+    }
+
     const newPayment: Payment = {
       id: crypto.randomUUID(),
+      receiptId: `RCPT-${crypto.randomUUID().substring(0,8).toUpperCase()}`,
       roomId: selectedResidentForPayment.roomId,
       ...paymentInput,
     };
@@ -164,8 +178,17 @@ export default function ResidentsPage() {
     setStoredData('pgResidents', updatedResidents);
     fetchData();
     setIsPaymentFormOpen(false);
-    setSelectedResidentForPayment(null);
-    toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded successfully.`, variant: "default" });
+    
+    setCurrentReceiptData({
+        payment: newPayment,
+        residentName: selectedResidentForPayment.name,
+        roomNumber: roomForPayment.roomNumber,
+        pgName: "PG Admin" // Or from a config/context later
+    });
+    setIsReceiptDialogOpen(true); // Open receipt dialog
+
+    toast({ title: "Payment Recorded", description: `Payment for ${selectedResidentForPayment.name} recorded. Receipt generated.`, variant: "default" });
+    setSelectedResidentForPayment(null); // Clear selection after processing
   };
 
 
@@ -201,6 +224,14 @@ export default function ResidentsPage() {
           onSubmit={handleSavePayment}
           residentName={selectedResidentForPayment.name}
           defaultRentAmount={currentRoomForPayment.rent}
+        />
+      )}
+
+      {currentReceiptData && (
+        <ReceiptDialog
+            isOpen={isReceiptDialogOpen}
+            onClose={() => setIsReceiptDialogOpen(false)}
+            receiptData={currentReceiptData}
         />
       )}
 
