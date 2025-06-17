@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Resident, Room, Payment, ActivityLogEntry } from '@/lib/types';
 import { format } from 'date-fns';
-import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil } from 'lucide-react';
+import { ArrowLeft, User, Phone, CalendarDays, BedDouble, Wallet, ReceiptText, History, Info, Shield, Image as ImageIcon, FileText, Pencil, UploadCloud } from 'lucide-react';
 import NextImage from 'next/image';
 
 
@@ -61,6 +61,16 @@ export default function ResidentDetailPage() {
 
   useEffect(() => {
     fetchResidentDetails();
+    // Listen for storage changes to update if data changes elsewhere
+    const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'pgResidents' || event.key === 'pgRooms') {
+            fetchResidentDetails();
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+    };
   }, [fetchResidentDetails]);
 
   if (isLoading) {
@@ -168,9 +178,9 @@ export default function ResidentDetailPage() {
                     {resident.photoUrl ? (
                         <NextImage src={resident.photoUrl} alt={`${resident.name}'s photo`} width={200} height={200} className="rounded-md border object-cover mx-auto" data-ai-hint="person portrait" />
                     ): (
-                        <div className="w-full h-40 bg-muted rounded-md flex items-center justify-center text-muted-foreground">
-                            <ImageIcon className="h-10 w-10" />
-                            <span className="ml-2">No photo</span>
+                        <div className="w-full aspect-square max-w-[200px] mx-auto bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
+                            <UploadCloud className="h-10 w-10" />
+                            <span className="mt-1 text-xs">No photo uploaded</span>
                         </div>
                     )}
                 </CardContent>
@@ -181,11 +191,11 @@ export default function ResidentDetailPage() {
                 </CardHeader>
                 <CardContent>
                     {resident.idProofUrl ? (
-                        <NextImage src={resident.idProofUrl} alt={`${resident.name}'s ID proof`} width={300} height={200} className="rounded-md border object-contain mx-auto" data-ai-hint="document id"/>
+                        <NextImage src={resident.idProofUrl} alt={`${resident.name}'s ID proof`} width={300} height={200} className="rounded-md border object-contain mx-auto" data-ai-hint="document id" />
                     ): (
-                         <div className="w-full h-40 bg-muted rounded-md flex items-center justify-center text-muted-foreground">
-                            <FileText className="h-10 w-10" />
-                            <span className="ml-2">No ID proof</span>
+                         <div className="w-full aspect-[3/2] max-w-[300px] mx-auto bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
+                            <UploadCloud className="h-10 w-10" />
+                             <span className="mt-1 text-xs">No ID proof uploaded</span>
                         </div>
                     )}
                 </CardContent>

@@ -22,8 +22,8 @@ export const ResidentSchema = z.object({
   personalInfo: z.string().optional(),
   roomId: z.string().nullable(),
   status: ResidentStatusSchema,
-  photoUrl: z.string().url({ message: "Invalid photo URL." }).nullable().optional(),
-  idProofUrl: z.string().url({ message: "Invalid ID proof URL." }).nullable().optional(),
+  photoUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).nullable().optional(),
+  idProofUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).nullable().optional(),
   guardianName: z.string().nullable().optional(),
   guardianContact: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {

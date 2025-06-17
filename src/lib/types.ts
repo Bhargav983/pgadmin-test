@@ -55,8 +55,8 @@ export interface Resident {
   status: ResidentStatus;
   payments: Payment[];
   activityLog: ActivityLogEntry[];
-  photoUrl?: string | null;
-  idProofUrl?: string | null;
+  photoUrl?: string | null; // Will store Data URI
+  idProofUrl?: string | null; // Will store Data URI
   guardianName?: string | null;
   guardianContact?: string | null;
 }
@@ -133,3 +133,4 @@ export interface ReceiptData {
   roomNumber: string;
   pgName?: string; // Optional, can be defaulted
 }
+

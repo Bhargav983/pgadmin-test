@@ -12,6 +12,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,13 +25,14 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon } from "lucide-react";
+import { CalendarIcon, User, Contact, Shield, FileText, Image as ImageIcon, UploadCloud } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ResidentSchema } from "@/lib/schemas";
 import type { Resident, ResidentFormValues, Room, ResidentStatus } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
 
 interface ResidentFormProps {
   onSubmit: (values: ResidentFormValues) => Promise<void>;
@@ -43,10 +45,14 @@ interface ResidentFormProps {
 const residentStatuses: { value: ResidentStatus; label: string }[] = [
   { value: "upcoming", label: "Upcoming" },
   { value: "active", label: "Active" },
-  { value: "former", label: "Former" }, 
+  { value: "former", label: "Former" },
 ];
 
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRooms, onCancel }: ResidentFormProps) {
+  const { toast } = useToast();
   const form = useForm<ResidentFormValues>({
     resolver: zodResolver(ResidentSchema),
     defaultValues: {
@@ -57,8 +63,8 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
       personalInfo: defaultValues?.personalInfo || "",
       roomId: defaultValues?.roomId || null,
       status: defaultValues?.status || "upcoming",
-      photoUrl: defaultValues?.photoUrl || "",
-      idProofUrl: defaultValues?.idProofUrl || "",
+      photoUrl: defaultValues?.photoUrl || null, // Will store Data URI
+      idProofUrl: defaultValues?.idProofUrl || null, // Will store Data URI
       guardianName: defaultValues?.guardianName || "",
       guardianContact: defaultValues?.guardianContact || "",
     },
@@ -74,33 +80,66 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
         personalInfo: defaultValues.personalInfo || "",
         roomId: defaultValues.roomId || null,
         status: defaultValues.status || (isEditing ? "active" : "upcoming"),
-        photoUrl: defaultValues.photoUrl || "",
-        idProofUrl: defaultValues.idProofUrl || "",
+        photoUrl: defaultValues.photoUrl || null,
+        idProofUrl: defaultValues.idProofUrl || null,
         guardianName: defaultValues.guardianName || "",
         guardianContact: defaultValues.guardianContact || "",
       });
-    } else { 
-      form.reset({ 
-        name: "", contact: "", enquiryDate: null, joiningDate: null, 
+    } else {
+      form.reset({
+        name: "", contact: "", enquiryDate: null, joiningDate: null,
         personalInfo: "", roomId: null, status: "upcoming",
-        photoUrl: "", idProofUrl: "", guardianName: "", guardianContact: ""
+        photoUrl: null, idProofUrl: null, guardianName: "", guardianContact: ""
       });
     }
   }, [defaultValues, form, isEditing]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: "photoUrl" | "idProofUrl") => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast({
+          title: "File too large",
+          description: `Please select an image smaller than ${MAX_FILE_SIZE_MB}MB.`,
+          variant: "destructive",
+        });
+        event.target.value = ""; // Clear the input
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image file (e.g., JPG, PNG, GIF).",
+          variant: "destructive",
+        });
+        event.target.value = ""; // Clear the input
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        form.setValue(fieldName, reader.result as string);
+        form.trigger(fieldName); // Trigger validation for the field
+      };
+      reader.readAsDataURL(file);
+    } else {
+      form.setValue(fieldName, null); // Clear if no file selected or selection cancelled
+      form.trigger(fieldName);
+    }
+  };
 
   const handleFormSubmit = async (values: ResidentFormValues) => {
     const processedValues: ResidentFormValues = {
       ...values,
       enquiryDate: values.enquiryDate === "" ? null : values.enquiryDate,
       joiningDate: values.joiningDate === "" ? null : values.joiningDate,
-      photoUrl: values.photoUrl === "" ? null : values.photoUrl,
-      idProofUrl: values.idProofUrl === "" ? null : values.idProofUrl,
+      photoUrl: values.photoUrl || null, // Already Data URI or null
+      idProofUrl: values.idProofUrl || null, // Already Data URI or null
       guardianName: values.guardianName === "" ? null : values.guardianName,
       guardianContact: values.guardianContact === "" ? null : values.guardianContact,
     };
     await onSubmit(processedValues);
   };
-  
+
   const photoPreview = form.watch("photoUrl");
   const idProofPreview = form.watch("idProofUrl");
 
@@ -157,20 +196,30 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
         <Card>
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><ImageIcon className="mr-2 h-5 w-5 text-primary"/>Photo & ID</CardTitle>
-            <CardDescription>Enter URLs for photo and ID proof images. Actual file uploads can be integrated later.</CardDescription>
+            <CardDescription>Upload resident's photo and ID proof. Max {MAX_FILE_SIZE_MB}MB per image.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <FormField
               control={form.control}
               name="photoUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Photo URL (Optional)</FormLabel>
+                  <FormLabel>Resident Photo</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://placehold.co/100x100.png" {...field} />
+                     <Input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => handleFileChange(e, "photoUrl")} 
+                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                      />
                   </FormControl>
-                  {photoPreview && (
-                     <Image src={photoPreview} alt="Photo Preview" width={100} height={100} className="mt-2 rounded-md border" data-ai-hint="person portrait" />
+                  {photoPreview ? (
+                     <Image src={photoPreview} alt="Photo Preview" width={100} height={100} className="mt-2 rounded-md border object-cover" data-ai-hint="person portrait" />
+                  ) : (
+                    <div className="mt-2 w-24 h-24 bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
+                        <UploadCloud className="h-8 w-8" />
+                        <span className="text-xs">Upload Photo</span>
+                    </div>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -181,12 +230,22 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
               name="idProofUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>ID Proof URL (Optional)</FormLabel>
+                  <FormLabel>ID Proof</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://placehold.co/300x200.png" {...field} />
+                     <Input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => handleFileChange(e, "idProofUrl")} 
+                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                      />
                   </FormControl>
-                   {idProofPreview && (
-                     <Image src={idProofPreview} alt="ID Proof Preview" width={300} height={200} className="mt-2 rounded-md border object-contain" data-ai-hint="document id" />
+                   {idProofPreview ? (
+                     <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mt-2 rounded-md border object-contain" data-ai-hint="document id" />
+                  ) : (
+                     <div className="mt-2 w-48 h-32 bg-muted rounded-md flex flex-col items-center justify-center text-muted-foreground border border-dashed">
+                        <UploadCloud className="h-10 w-10" />
+                        <span className="text-xs">Upload ID Proof</span>
+                    </div>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -207,7 +266,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 <FormItem>
                   <FormLabel>Guardian Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Jane Doe" {...field} />
+                    <Input placeholder="e.g., Jane Doe" {...field} value={field.value || ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -220,7 +279,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                 <FormItem>
                   <FormLabel>Guardian Contact Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 9876543211" {...field} />
+                    <Input placeholder="e.g., 9876543211" {...field} value={field.value || ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -318,10 +377,10 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assign Room</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || undefined} 
-                    disabled={form.getValues("status") === 'former'} 
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ""} // Ensure value is string or undefined for Select
+                    disabled={form.getValues("status") === 'former'}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -329,9 +388,9 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                       <SelectItem value="null">Unassigned</SelectItem>
+                       <SelectItem value="">Unassigned</SelectItem> {/* Changed value from "null" to "" for Select */}
                       {availableRooms
-                        .filter(room => room.id && room.id.trim() !== "") 
+                        .filter(room => room.id && room.id.trim() !== "")
                         .map((room) => (
                           <SelectItem key={room.id} value={room.id} disabled={room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId}>
                             {room.roomNumber} (Occupancy: {room.currentOccupancy}/{room.capacity}) {room.currentOccupancy >= room.capacity && room.id !== defaultValues?.roomId ? " - Full" : ""}
@@ -349,13 +408,13 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select 
+                  <Select
                     onValueChange={(value) => {
                       field.onChange(value);
-                      if (value === 'former') { 
-                        form.setValue('roomId', null);
+                      if (value === 'former') {
+                        form.setValue('roomId', null); // This is fine as it internally means unassign
                       }
-                    }} 
+                    }}
                     value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -364,7 +423,7 @@ export function ResidentForm({ onSubmit, defaultValues, isEditing, availableRoom
                     </FormControl>
                     <SelectContent>
                       {residentStatuses.map((status) => (
-                        <SelectItem key={status.value} value={status.value} disabled={isEditing && defaultValues?.status === 'former' && status.value !== 'former' && status.value !== 'upcoming'}> 
+                        <SelectItem key={status.value} value={status.value} disabled={isEditing && defaultValues?.status === 'former' && status.value !== 'former' && status.value !== 'upcoming'}>
                           {status.label}
                         </SelectItem>
                       ))}
