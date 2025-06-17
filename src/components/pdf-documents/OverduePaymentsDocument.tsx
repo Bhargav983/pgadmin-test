@@ -138,18 +138,18 @@ const styles = StyleSheet.create({
 });
 
 const OverduePaymentsDocument: React.FC<OverduePaymentsDocumentProps> = ({ data, totalOverdueAmount, reportDate }) => (
-  <Document title={`Overdue Payments Report - ${reportDate}`} author="PG Admin">
+  <Document title={`Overdue Payments Report - ${reportDate || 'N/A'}`} author="PG Admin">
     <Page size="A4" style={styles.page} orientation="portrait">
       <Text style={styles.header}>Overdue Payments Report</Text>
-      <Text style={styles.reportDateText}>{reportDate}</Text>
+      <Text style={styles.reportDateText}>{reportDate || 'N/A'}</Text>
 
       <View style={styles.totalSection}>
         <Text style={styles.totalText}>
-          Total Overdue Amount: ₹{totalOverdueAmount.toLocaleString()}
+          Total Overdue Amount: ₹{(totalOverdueAmount || 0).toLocaleString()}
         </Text>
       </View>
 
-      {data.length > 0 ? (
+      {data && data.length > 0 ? (
         <View style={styles.table}>
           {/* Table Header */}
           <View style={styles.tableHeaderRow}>
@@ -160,12 +160,14 @@ const OverduePaymentsDocument: React.FC<OverduePaymentsDocumentProps> = ({ data,
           </View>
           {/* Table Body */}
           {data.map((item) => (
-            <View style={styles.tableRow} key={item.id}>
-              <View style={styles.tableCol}><Text>{item.name}</Text></View>
-              <View style={styles.tableCol}><Text>{item.roomDetails?.roomNumber || 'N/A'}</Text></View>
-              <View style={styles.tableCol}><Text style={styles.currencyText}>₹{item.overdueAmount.toLocaleString()}</Text></View>
-              <View style={styles.tableCol}><Text>{item.lastPaymentMonth}</Text></View>
-            </View>
+            item ? ( // Ensure item itself is not null/undefined
+              <View style={styles.tableRow} key={item.id || crypto.randomUUID()}>
+                <View style={styles.tableCol}><Text>{item.name || 'N/A'}</Text></View>
+                <View style={styles.tableCol}><Text>{item.roomDetails?.roomNumber || 'N/A'}</Text></View>
+                <View style={styles.tableCol}><Text style={styles.currencyText}>₹{(item.overdueAmount || 0).toLocaleString()}</Text></View>
+                <View style={styles.tableCol}><Text>{item.lastPaymentMonth || 'N/A'}</Text></View>
+              </View>
+            ) : null
           ))}
         </View>
       ) : (
@@ -183,4 +185,3 @@ const OverduePaymentsDocument: React.FC<OverduePaymentsDocumentProps> = ({ data,
 );
 
 export default OverduePaymentsDocument;
-
