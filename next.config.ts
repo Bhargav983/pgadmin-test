@@ -22,7 +22,13 @@ const nextConfig: NextConfig = {
         hostname: 'www.brutimes.com',
         port: '',
         pathname: '/**',
-      }
+      },
+       {
+        protocol: 'https',
+        hostname: 'www.iiiqbets.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

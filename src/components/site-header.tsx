@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Image from "next/image";
 
 export function SiteHeader() {
   const { logout } = useAuth();
@@ -28,7 +29,13 @@ export function SiteHeader() {
                 <path d="M2 17l10 5 10-5"></path>
                 <path d="M2 12l10 5 10-5"></path>
             </svg>
-            <span className="hidden font-bold sm:inline-block font-headline">PG Admin</span>
+            <span className="hidden font-bold sm:inline-block font-headline"> <Image
+    src="https://www.iiiqbets.com/wp-content/uploads/2021/04/png-1.png"
+    alt="Logo"
+    width={60}
+    height={50}
+    className="h-full w-full object-contain"
+  /></span>
           </Link>
         </div>
         

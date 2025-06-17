@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LoginSchema } from "@/lib/schemas";
 import { useAuth } from "@/context/auth-context";
 import { KeyRound } from "lucide-react";
+import Image from "next/image"; 
 
 
 type LoginFormValues = z.infer<typeof LoginSchema>;
@@ -46,9 +47,15 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <KeyRound size={32} />
-          </div>
+     <div className="mx-auto mb-4 ">
+  <Image
+    src="https://www.iiiqbets.com/wp-content/uploads/2021/04/png-1.png"
+    alt="Logo"
+    width={150}
+    height={50}
+    className="h-full w-full object-contain"
+  />
+</div>
           <CardTitle className="font-headline text-3xl">PG Admin Login</CardTitle>
           <CardDescription>Access your PG management dashboard.</CardDescription>
         </CardHeader>
