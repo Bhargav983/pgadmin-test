@@ -8,12 +8,17 @@ import { LogOut, Users, ShieldCheck } from "lucide-react";
 import { SuperAuthProvider, useSuperAuth } from '@/context/super-auth-context';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from "next/image";
+import { useEffect } from 'react';
 
-function SuperAdminHeader() {
+// Component for the header, using the SuperAuth context
+function SuperAdminHeaderInternal() {
   const { superAdminLogout, isSuperAdminAuthenticated } = useSuperAuth();
   const pathname = usePathname();
 
-  if (!isSuperAdminAuthenticated) return null; // Don't show header if not auth (login page)
+  // Don't show header if not authenticated or on the login page itself
+  if (!isSuperAdminAuthenticated || pathname === '/super-admin/login') {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-primary/10 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -22,9 +27,9 @@ function SuperAdminHeader() {
            <Image
                 src="https://www.iiiqbets.com/wp-content/uploads/2021/04/png-1.png"
                 alt="Logo"
-                width={80} 
+                width={80}
                 height={40}
-                className="h-full object-contain" 
+                className="h-full object-contain"
             />
           <ShieldCheck className="h-7 w-7 text-primary" />
           <span className="font-headline text-xl font-bold text-primary">Super Admin Portal</span>
@@ -49,19 +54,24 @@ function SuperAdminHeader() {
   );
 }
 
-
-export default function SuperAdminLayout({ children }: { children: ReactNode }) {
+// Component that defines the main content structure, using the SuperAuth context
+function SuperAdminPageContent({ children }: { children: ReactNode }) {
   const { isSuperAdminAuthenticated, isLoading } = useSuperAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!isLoading && !isSuperAdminAuthenticated && pathname !== '/super-admin/login') {
-      router.push('/super-admin/login');
+    if (!isLoading) {
+      if (!isSuperAdminAuthenticated && pathname !== '/super-admin/login') {
+        router.push('/super-admin/login');
+      }
+      // Redirect to user-management if authenticated and on login page
+      if (isSuperAdminAuthenticated && pathname === '/super-admin/login') {
+          router.push('/super-admin/user-management');
+      }
     }
   }, [isSuperAdminAuthenticated, isLoading, router, pathname]);
-  
-  // This outer check is important for the initial load within the SuperAuthProvider
+
   if (isLoading && pathname !== '/super-admin/login') {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -70,16 +80,20 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
     );
   }
   
-  // If not authenticated and not on login page, AuthProvider's effect will redirect.
-  // Return null to prevent brief flash of layout for unauth users outside login.
+  // If not authenticated and not on the login page, useEffect will redirect, return null to prevent flash of content
   if (!isSuperAdminAuthenticated && pathname !== '/super-admin/login') {
-    return null;
+    return null; 
   }
 
+  // If on the login page, just render children (the login form) without the main layout
+  if (pathname === '/super-admin/login') {
+    return <>{children}</>;
+  }
 
+  // Authenticated and not on login page, render the full layout
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SuperAdminHeader />
+      <SuperAdminHeaderInternal /> {/* Use the internal header component */}
       <main className="flex-1 p-6 container mx-auto">
         {children}
       </main>
@@ -87,17 +101,11 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
   );
 }
 
-// Wrap the default export with the provider
-export function Layout({ children }: { children: ReactNode }) {
+// The default export for the layout, providing the context
+export default function SuperAdminRootLayout({ children }: { children: ReactNode }) {
   return (
     <SuperAuthProvider>
-      <SuperAdminLayout>{children}</SuperAdminLayout>
+      <SuperAdminPageContent>{children}</SuperAdminPageContent>
     </SuperAuthProvider>
   );
 }
-
-// This change makes sure the provider is at the root of this specific layout tree.
-// The default export from a layout file MUST be the component itself.
-// We create a new component `Layout` that includes the provider and then renders `SuperAdminLayout`.
-// For Next.js to correctly use this as a layout, the default export must be this wrapper.
-export default Layout;
