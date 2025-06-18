@@ -1,14 +1,14 @@
 
 import { z } from 'zod';
 import { complaintCategories, enquiryStatuses } from './types';
-import type { RecipientType } from './types';
+import type { RecipientType, ManagedUserRole, ManagedUserStatus } from './types';
 
 export const RoomSchema = z.object({
   roomNumber: z.string().min(1, { message: "Room number is required." }),
   capacity: z.coerce.number().int().min(1, { message: "Capacity must be at least 1." }),
   rent: z.coerce.number().min(0, { message: "Rent must be a non-negative number." }),
   floorNumber: z.coerce.number().int().min(0, { message: "Floor number must be 0 or greater (e.g., 0 for Ground Floor)." }),
-  facilities: z.string().optional(), // Handled as comma-separated string in form
+  facilities: z.string().optional(),
 });
 
 export const ResidentStatusSchema = z.enum(['active', 'upcoming', 'former']);
@@ -80,6 +80,23 @@ export const LoginSchema = z.object({
   password: z.string().min(1, { message: "Password is required." }),
 });
 
+// Super Admin Login Schema
+export const SuperAdminLoginSchema = z.object({
+  email: z.string().email({ message: "Invalid email address." }),
+  password: z.string().min(1, { message: "Password is required." }),
+});
+
+export const ManagedUserRoleSchema = z.enum(['Admin', 'Manager']);
+export const ManagedUserStatusSchema = z.enum(['active', 'inactive']);
+
+export const ManagedUserSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters.").max(100),
+  email: z.string().email("Invalid email address."),
+  role: ManagedUserRoleSchema,
+  status: ManagedUserStatusSchema,
+});
+
+
 export const PaymentModeSchema = z.enum(['Cash', 'UPI', 'Bank Transfer']);
 
 export const PaymentSchema = z.object({
@@ -132,7 +149,7 @@ const ComplaintCategoryEnum = z.enum(complaintCategories);
 
 export const ComplaintSchema = z.object({
   residentId: z.string().min(1, "Resident selection is required."),
-  category: z.string().min(1, "Category is required."), // Accepts enum or "Other"
+  category: z.string().min(1, "Category is required."), 
   customCategory: z.string().optional(),
   description: z.string().min(3, "Description must be at least 3 characters long."),
   status: ComplaintStatusSchema.default('Open'),
@@ -207,18 +224,17 @@ export const EnquirySchema = z.object({
   }
 });
 
-// Profile Page Schemas
 export const ProfileInfoSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters.").max(50, "Name is too long."),
-  email: z.string().email("Invalid email address."), // Typically read-only but good to have in schema
+  email: z.string().email("Invalid email address."),
   photoUrl: z.string().startsWith("data:image/", { message: "Invalid image Data URI." }).max(2 * 1024 * 1024, { message: "Photo image too large (max 2MB)." }).nullable().optional(),
 });
 
 export const ChangePasswordSchema = z.object({
-  currentPassword: z.string().optional(), // Optional for this simulation
+  currentPassword: z.string().optional(),
   newPassword: z.string().min(8, "New password must be at least 8 characters."),
   confirmNewPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmNewPassword, {
   message: "New passwords do not match.",
-  path: ["confirmNewPassword"], // Point error to the confirm password field
+  path: ["confirmNewPassword"],
 });

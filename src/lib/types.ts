@@ -15,7 +15,7 @@ export type ActivityType =
   | 'VACATED'
   | 'ACTIVATED'
   | 'REACTIVATED'
-  | 'ENQUIRY_CONVERTED'; // Added for enquiry conversion log
+  | 'ENQUIRY_CONVERTED';
 
 export interface ActivityLogEntry {
   id: string;
@@ -28,19 +28,19 @@ export interface ActivityLogEntry {
     noClaimsConfirmed?: boolean;
     vacatedFromRoomId?: string | null;
     vacatedFromRoomNumber?: string;
-    convertedFromEnquiryId?: string; // To link back to the enquiry
+    convertedFromEnquiryId?: string;
   };
 }
 
 export interface Payment {
-  id: string; // Unique ID for the payment transaction
-  receiptId?: string; // Unique ID for the generated receipt
-  month: number; // 1-12
+  id: string;
+  receiptId?: string;
+  month: number;
   year: number;
   amount: number;
-  date: string; // ISO string format for date
+  date: string;
   mode: PaymentMode;
-  roomId: string; // ID of the room for which payment was made at the time of payment
+  roomId: string;
   notes?: string;
 }
 
@@ -49,7 +49,7 @@ export interface Room {
   roomNumber: string;
   capacity: number;
   rent: number;
-  currentOccupancy: number; // Represents active or upcoming residents in the room
+  currentOccupancy: number;
   floorNumber: number;
   facilities?: string[];
 }
@@ -71,21 +71,20 @@ export interface Resident {
   guardianName?: string | null;
   guardianContact?: string | null;
   monthlyDiscountAmount?: number | null;
-  advanceAmount?: number | null; // New field for advance/deposit
-  advanceReceivedDate?: string | null; // New field for date advance was received
+  advanceAmount?: number | null;
+  advanceReceivedDate?: string | null;
 }
 
 export type AttendanceStatus = 'Pending' | 'Present' | 'Late' | 'Absent' | 'On Leave';
 
 export interface AttendanceRecord {
-  id: string; // Unique ID for the attendance entry: e.g., residentId-YYYY-MM-DD
+  id: string;
   residentId: string;
-  date: string; // YYYY-MM-DD format
-  checkInTime: string | null; // Store as HH:mm or full ISO if needed
-  checkOutTime: string | null; // Store as HH:mm or full ISO
+  date: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
   status: AttendanceStatus;
   notes: string | null;
-  // Denormalized data for easier display, captured at the time of record creation/update
   residentNameAtTime: string;
   roomNumberAtTime: string | null;
 }
@@ -98,17 +97,16 @@ export type ComplaintCategory = typeof complaintCategories[number];
 export interface Complaint {
   id: string;
   residentId: string;
-  residentName: string; // Denormalized for display
-  roomNumber: string; // Denormalized for display
-  category: ComplaintCategory | string; // Allow 'Other' as custom string
+  residentName: string;
+  roomNumber: string;
+  category: ComplaintCategory | string;
   description: string;
-  dateReported: string; // ISO Date string
+  dateReported: string;
   status: ComplaintStatus;
   resolutionNotes?: string | null;
-  dateResolved?: string | null; // ISO Date string
+  dateResolved?: string | null;
 }
 
-// For General Info Page
 export interface Holiday {
   id: string;
   date: string;
@@ -122,7 +120,6 @@ export interface ImportantContact {
   contactNumber: string;
 }
 
-// For Enquiries
 export type EnquiryStatus = 'New' | 'Follow-up' | 'Converted' | 'Closed';
 export const enquiryStatuses: EnquiryStatus[] = ['New', 'Follow-up', 'Converted', 'Closed'];
 
@@ -131,19 +128,18 @@ export interface Enquiry {
   name: string;
   contact: string;
   email?: string | null;
-  enquiryDate: string; // ISO Date string
+  enquiryDate: string;
   status: EnquiryStatus;
   notes?: string | null;
-  nextFollowUpDate?: string | null; // ISO Date string
+  nextFollowUpDate?: string | null;
 }
-
 
 export type RoomFormValues = {
   roomNumber: string;
   capacity: number;
   rent: number;
   floorNumber: number;
-  facilities?: string; // Comma-separated string from form
+  facilities?: string;
 };
 
 export type ResidentFormValues = Omit<Resident, 'id' | 'payments' | 'activityLog'>;
@@ -153,27 +149,23 @@ export type EmailConfigFormValues = z.infer<typeof EmailConfigSchema>;
 export type ComplaintFormValues = {
   residentId: string;
   category: ComplaintCategory | string;
-  customCategory?: string; // For when category is 'Other'
+  customCategory?: string;
   description: string;
   status: ComplaintStatus;
   resolutionNotes?: string | null;
 };
-// For display in table, includes denormalized data
-export interface DisplayComplaint extends Complaint {}
 
+export interface DisplayComplaint extends Complaint {}
 export type EnquiryFormValues = Omit<Enquiry, 'id'>;
 
-
-// For receipt display
 export interface ReceiptData {
   payment: Payment;
   residentName: string;
   roomNumber: string;
-  floorNumber?: number; // Added floor number
-  pgName?: string; // Optional, can be defaulted
+  floorNumber?: number;
+  pgName?: string;
 }
 
-// For Announcements
 export type RecipientType = 'all' | 'specific' | 'selected';
 
 export interface AnnouncementFormValues {
@@ -184,22 +176,35 @@ export interface AnnouncementFormValues {
   body: string;
 }
 
-// For Vacate Resident Dialog
 export interface VacateResidentFormValues {
     reasonForLeaving: string;
     confirmNoDues: boolean;
     confirmNoClaims: boolean;
 }
 
-// For Profile Page
 export interface ProfileInfoFormValues {
   name: string;
-  email: string; // Usually read-only from auth, but can be part of the form
+  email: string;
   photoUrl?: string | null;
 }
 
 export interface ChangePasswordFormValues {
-  currentPassword?: string; // Optional if backend supports password change without current one (e.g. for first time setup or admin override)
+  currentPassword?: string;
   newPassword: string;
   confirmNewPassword: string;
 }
+
+// Super Admin - User Management
+export type ManagedUserRole = 'Admin' | 'Manager';
+export type ManagedUserStatus = 'active' | 'inactive';
+
+export interface ManagedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: ManagedUserRole;
+  status: ManagedUserStatus;
+  // Password is not stored/managed in this iteration for simplicity
+}
+
+export type ManagedUserFormValues = Omit<ManagedUser, 'id'>;
