@@ -169,6 +169,7 @@ export interface ReceiptData {
   payment: Payment;
   residentName: string;
   roomNumber: string;
+  floorNumber?: number; // Added floor number
   pgName?: string; // Optional, can be defaulted
 }
 

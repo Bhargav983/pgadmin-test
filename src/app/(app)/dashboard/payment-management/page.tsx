@@ -341,7 +341,13 @@ export default function PaymentManagementPage() {
     fetchDataAndProcess(); 
     
     setIsPaymentFormOpen(false);
-    setCurrentReceiptData({ payment: newPayment, residentName: residentData.name, roomNumber: roomForPayment.roomNumber, pgName: "PG Admin"});
+    setCurrentReceiptData({ 
+        payment: newPayment, 
+        residentName: residentData.name, 
+        roomNumber: roomForPayment.roomNumber, 
+        floorNumber: roomForPayment.floorNumber, 
+        pgName: "PG Admin" 
+    });
     setIsReceiptDialogOpen(true);
     toast({ title: "Payment Recorded", description: `Payment for ${residentData.name} recorded.`, variant: "default" });
     setSelectedResidentForPayment(null);

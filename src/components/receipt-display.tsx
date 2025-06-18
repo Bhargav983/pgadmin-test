@@ -11,8 +11,13 @@ interface ReceiptDisplayProps {
 }
 
 export function ReceiptDisplay({ receiptData }: ReceiptDisplayProps) {
-  const { payment, residentName, roomNumber, pgName = "PG Admin" } = receiptData;
+  const { payment, residentName, roomNumber, floorNumber, pgName = "PG Admin" } = receiptData;
   const issueDate = new Date();
+
+  const getFloorDisplay = (floor?: number) => {
+    if (floor === undefined || floor === null) return 'N/A';
+    return floor === 0 ? 'Ground' : floor.toString();
+  };
 
   return (
     <div className="p-6 bg-card text-card-foreground rounded-lg border border-border print:border-none print:shadow-none print:rounded-none">
@@ -60,9 +65,15 @@ export function ReceiptDisplay({ receiptData }: ReceiptDisplayProps) {
           <p className="font-semibold">Received From:</p>
           <p>{residentName}</p>
         </div>
-        <div>
-          <p className="font-semibold">Room No:</p>
-          <p>{roomNumber}</p>
+         <div className="grid grid-cols-2">
+            <div>
+                <p className="font-semibold">Room No:</p>
+                <p>{roomNumber}</p>
+            </div>
+            <div>
+                <p className="font-semibold">Floor No:</p>
+                <p>{getFloorDisplay(floorNumber)}</p>
+            </div>
         </div>
       </div>
 

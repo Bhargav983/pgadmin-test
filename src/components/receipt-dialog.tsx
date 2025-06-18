@@ -44,7 +44,12 @@ const WhatsAppIcon = () => (
 export function ReceiptDialog({ isOpen, onClose, receiptData }: ReceiptDialogProps) {
   if (!receiptData) return null;
 
-  const { payment, residentName, pgName = "PG Admin" } = receiptData;
+  const { payment, residentName, pgName = "PG Admin", roomNumber, floorNumber } = receiptData;
+
+  const getFloorDisplay = (floor?: number) => {
+    if (floor === undefined || floor === null) return 'N/A';
+    return floor === 0 ? 'Ground' : floor.toString();
+  };
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
@@ -74,7 +79,7 @@ export function ReceiptDialog({ isOpen, onClose, receiptData }: ReceiptDialogPro
 Payment Receipt - ${pgName}
 -----------------------------------
 Resident: ${residentName}
-Room: ${receiptData.roomNumber}
+Room: ${roomNumber} (Floor: ${getFloorDisplay(floorNumber)})
 Receipt ID: ${payment.receiptId || 'N/A'}
 Amount: ₹${payment.amount.toLocaleString()}
 Payment For: ${format(new Date(payment.year, payment.month - 1), 'MMMM yyyy')}
